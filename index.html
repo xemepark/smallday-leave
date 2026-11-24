@@ -136,13 +136,13 @@
     <div id="status" class="status"></div>
 
     <div class="counts">
-      <div class="count"><small id="cLeaveLabel">同仁排休</small><b id="cLeave">0</b><span id="cLeaveMax"></span></div>
+      <div class="count"><small id="cLeaveLabel">自排</small><b id="cLeave">0</b><span id="cLeaveMax"></span></div>
       <div class="count" id="cWeekendBox"><small>週六日自選</small><b id="cWeekend">0</b><span id="cWeekendMax"></span></div>
     </div>
 
     <div class="legend">
       <span><i style="background:var(--leave)"></i>我的排休</span>
-      <span><i style="background:var(--mgr-bg);border:1px solid var(--mgr)"></i>公司排休</span>
+      <span><i style="background:var(--mgr-bg);border:1px solid var(--mgr)"></i>公排</span>
       <span><i style="background:var(--ok-bg);border:1px solid var(--ok)"></i>還有名額</span>
       <span><i style="background:var(--full-bg)"></i>額滿／禁休</span>
       <span><i style="background:#eaf3ec;border:1px solid #4f8a5b"></i>公司公休</span>
@@ -175,7 +175,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '1.9.0';
+const VERSION = '2.0.0';
 const POLL_MS = 15000;
 const WEEK = '日一二三四五六';
 
@@ -342,7 +342,7 @@ function render(d){
     unset:  '主管還沒設定劃假時間'
   }[d.window.status];
 
-  $('#cLeaveLabel').textContent = Number(m) + ' 月同仁排休';
+  $('#cLeaveLabel').textContent = Number(m) + ' 月自排';
   $('#cLeave').textContent = d.counts.leave;
   $('#cLeaveMax').textContent = ' / ' + d.limits.maxLeave + ' 天';
   $('#cWeekendBox').classList.toggle('hidden', !d.limits.weekendCapped);
@@ -377,8 +377,8 @@ function render(d){
 
 function dayState(day){
   if (day.holiday) return { cls: 'holiday', text: '公休' };
-  if (day.mine === '同仁排休') return { cls: 'mine-leave', text: day.mineBy === 'admin' ? '排(主管)' : '排休' };
-  if (day.mine === '公司排休') return { cls: 'mine-mgr', text: '公司排' };
+  if (day.mine === '自排') return { cls: 'mine-leave', text: day.mineBy === 'admin' ? '自排(主管)' : '自排' };
+  if (day.mine === '公排') return { cls: 'mine-mgr', text: '公排' };
   if (day.mine) return { cls: 'mine-other', text: day.mine };
   if (day.unlimited) return { cls: 'open', text: '可排' };
   if (day.quota === null) return { cls: 'na', text: '—' };
@@ -434,9 +434,9 @@ function fillSheet(date){
 
   const disable = (label, why) => { btn.textContent = label; btn.disabled = true; hint.textContent = why || ''; };
 
-  if (day.holiday) return disable('全公司公休', '這天大家統一放假（' + day.holiday + '），不用劃，也不佔同仁排休');
-  if (day.mine === '同仁排休' && day.mineBy === 'admin') return disable('已排休', '這天是主管幫你排的，要調整請洽主管');
-  if (day.mine === '同仁排休'){
+  if (day.holiday) return disable('全公司公休', '這天大家統一放假（' + day.holiday + '），不用劃，也不佔自排');
+  if (day.mine === '自排' && day.mineBy === 'admin') return disable('已排休', '這天是主管幫你排的，要調整請洽主管');
+  if (day.mine === '自排'){
     if (d.window.status !== 'open') return disable('取消這天', '不在劃假時間，要調整請找人換班並經主管同意');
     btn.className = 'btn danger' + (state.confirmCancel ? ' confirm' : '');
     btn.textContent = state.confirmCancel ? '確定取消這天？' : '取消這天排休';
@@ -453,7 +453,7 @@ function fillSheet(date){
     if (day.quota <= 0) return disable('這天禁休', day.note);
     if (day.used >= day.quota) return disable('名額已滿', '可以跟已排休的同事協調看看');
   }
-  if (d.counts.leave >= d.limits.maxLeave) return disable('劃這天排休', '同仁排休 ' + d.limits.maxLeave + ' 天已經劃滿');
+  if (d.counts.leave >= d.limits.maxLeave) return disable('劃這天排休', '自排 ' + d.limits.maxLeave + ' 天已經劃滿');
   if (isWeekend && d.limits.weekendCapped && d.counts.weekend >= d.limits.maxWeekend)
     return disable('劃這天排休', '週六日自選 ' + d.limits.maxWeekend + ' 天已經選滿');
 
