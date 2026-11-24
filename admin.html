@@ -25,6 +25,9 @@
   header{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:12px}
   .who{font-size:12px;color:var(--sub);text-align:right}
   .setbtn{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 14px;font:inherit;font-weight:600;color:var(--ink);cursor:pointer;margin-bottom:4px}
+  .menu{display:flex;gap:6px;overflow-x:auto;margin:0 0 12px;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+  .menu a{flex:none;text-decoration:none;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:7px 14px;font-size:14px;font-weight:600;white-space:nowrap}
+  .menu a.on{background:var(--ink);color:#fff;border-color:var(--ink)}
   .views{display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:12px;width:max-content;max-width:100%}
   .views button{border:0;background:none;border-radius:9px;padding:8px 18px;font:inherit;font-weight:700;color:var(--sub);cursor:pointer}
   .views button.on{background:var(--ink);color:#fff}
@@ -158,10 +161,10 @@
   <section id="app" class="hidden">
     <header>
       <div><div class="brand">小日子劃假系統</div><h1>管理後台</h1></div>
-      <div class="who"><button class="setbtn hidden" id="adminsBtn">👥 管理員</button> <button class="setbtn" id="settingsBtn">⚙ 系統設定</button><br><span class="badge" id="roleBadge"></span> <span id="who"></span>・<button class="link" id="logoutBtn">登出</button></div>
+      <div class="who"><span class="badge" id="roleBadge"></span> <span id="who"></span>・<button class="link" id="logoutBtn">登出</button></div>
     </header>
 
-    <div class="views"><button id="vQuota" class="on">名額設定</button><button id="vRoster">排休總表</button></div>
+    <nav class="menu" id="menu"></nav>
 
     <div class="bar">
       <div class="month"><button id="prev" aria-label="上個月">‹</button><b id="monthLabel"></b><button id="next" aria-label="下個月">›</button></div>
@@ -294,10 +297,10 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 const WEEK = '日一二三四五六';
 const $ = s => document.querySelector(s);
-const state = { token: null, data: null, roster: null, view: 'quota', store: null, rStore: '全部', month: null, edit: null, leave: null, busy: false };
+const state = { token: null, me: null, data: null, roster: null, view: 'quota', store: null, rStore: '全部', month: null, edit: null, leave: null, busy: false };
 const store = {
   get(k){ try { return sessionStorage.getItem(k); } catch(e){ return null; } },
   set(k,v){ try { sessionStorage.setItem(k,v); } catch(e){} },
@@ -308,16 +311,57 @@ const store = {
 function onGsiLoad(){
   google.accounts.id.initialize({ client_id: CONFIG.CLIENT_ID, callback: r => setToken(r.credential), auto_select: true, cancel_on_tap_outside: false });
   google.accounts.id.renderButton($('#gbtn'), { theme:'outline', size:'large', shape:'pill', text:'signin_with', locale:'zh-TW', width:260 });
-  const saved = store.get('adminToken');
+  const saved = store.get('token');
   if (saved && !expired(saved)) setToken(saved); else { showLogin(''); google.accounts.id.prompt(); }
 }
 function expired(t){
   try { const p = JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); return p.exp * 1000 < Date.now() + 60000; }
   catch(e){ return true; }
 }
-function setToken(t){ state.token = t; store.set('adminToken', t); load(); }
+function setToken(t){ state.token = t; store.set('token', t); start(); }
+
+/** 先確認身分：沒有管理權限的人送回劃假頁 */
+async function start(){
+  setBusy(true);
+  try {
+    state.me = await api('whoami');
+    if (!state.me.admin){ location.replace('index.html'); return; }
+  } catch(e){ handleError(e); setBusy(false); return; }
+  setBusy(false);
+  applyHash();
+}
+/** 網址 #quota / #roster / #settings / #admins 決定顯示哪個畫面 */
+async function applyHash(){
+  let h = location.hash.slice(1) || 'quota';
+  if (h === 'admins' && !state.me.owner) h = 'quota';
+  closePanel(true);
+  // 系統設定、管理員是彈出面板，背後維持目前的畫面
+  const v = h === 'roster' ? 'roster' : h === 'quota' ? 'quota' : (state.data || state.roster ? state.view : 'quota');
+  await setView(v);
+  if (h === 'settings' && state.data) openSettings();
+  if (h === 'admins' && state.data) openAdmins();
+  renderMenu(h);
+}
+window.addEventListener('hashchange', () => { if (state.me) applyHash(); });
+
+/* ===== 依角色顯示的選單（員工頁、管理後台共用同一份） ===== */
+const NAV = [
+  { id: 'leave',    label: '我的劃假', href: 'index.html',         show: me => me.staff },
+  { id: 'quota',    label: '名額設定', href: 'admin.html#quota',    show: me => me.admin },
+  { id: 'roster',   label: '排休總表', href: 'admin.html#roster',   show: me => me.admin },
+  { id: 'settings', label: '系統設定', href: 'admin.html#settings', show: me => me.admin },
+  { id: 'admins',   label: '管理員',   href: 'admin.html#admins',   show: me => me.owner }
+];
+function renderMenu(active){
+  const m = $('#menu'); if (!m || !state.me) return;
+  const items = NAV.filter(n => n.show(state.me));
+  m.textContent = '';
+  m.classList.toggle('hidden', items.length < 2);
+  items.forEach(n => { const a = el('a', n.id === active ? 'on' : '', n.label); a.href = n.href; m.appendChild(a); });
+}
+
 function showLogin(msg){ closePanel(); $('#app').classList.add('hidden'); $('#login').classList.remove('hidden'); $('#loginMsg').textContent = msg || ''; }
-function logout(msg){ state.token = null; store.del('adminToken'); if (window.google) google.accounts.id.disableAutoSelect(); showLogin(msg); }
+function logout(msg){ state.token = null; state.me = null; store.del('token'); if (window.google) google.accounts.id.disableAutoSelect(); showLogin(msg); }
 
 /* ===== API ===== */
 async function api(action, extra){
@@ -348,12 +392,10 @@ async function load(month){
 }
 function setView(v){
   state.view = v;
-  $('#vQuota').classList.toggle('on', v === 'quota');
-  $('#vRoster').classList.toggle('on', v === 'roster');
   $('#quotaView').classList.toggle('hidden', v !== 'quota');
   $('#quotaLegend').classList.toggle('hidden', v !== 'quota');
   $('#rosterView').classList.toggle('hidden', v !== 'roster');
-  load(state.month);
+  return load(state.month);
 }
 
 /* ===== 排休總表 ===== */
@@ -465,7 +507,6 @@ function render(d){
   const isOwner = d.role === 'owner';
   $('#roleBadge').textContent = isOwner ? '系統擁有者' : '管理員';
   $('#roleBadge').className = 'badge' + (isOwner ? ' owner' : '');
-  $('#adminsBtn').classList.toggle('hidden', !isOwner);
   if ($('#adminPanel').classList.contains('show')) fillAdmins();
   const [y, m] = d.month.split('-');
   $('#monthLabel').textContent = y + ' 年 ' + Number(m) + ' 月';
@@ -555,7 +596,18 @@ function openPanel(role, i){
 
   $('#backdrop').classList.add('show'); $('#panel').classList.add('show');
 }
-function closePanel(){ state.edit = null; state.leave = null; $('#backdrop').classList.remove('show'); ['#panel', '#setPanel', '#adminPanel', '#leavePanel'].forEach(id => $(id).classList.remove('show')); }
+function closePanel(silent){
+  state.edit = null; state.leave = null;
+  $('#backdrop').classList.remove('show');
+  ['#panel', '#setPanel', '#adminPanel', '#leavePanel'].forEach(id => $(id).classList.remove('show'));
+  // 關掉「系統設定」「管理員」面板時，網址和選單回到目前的畫面
+  const h = location.hash.slice(1);
+  if (silent !== true && (h === 'settings' || h === 'admins')){
+    const v = state.view === 'roster' ? 'roster' : 'quota';
+    history.replaceState(null, '', '#' + v);
+    renderMenu(v);
+  }
+}
 
 /* ===== 管理員（只有系統擁有者） ===== */
 function openAdmins(){
@@ -684,11 +736,7 @@ $('#resetBtn').onclick = reset;
 $('#cancelBtn').onclick = closePanel;
 $('#backdrop').onclick = closePanel;
 $('#logoutBtn').onclick = () => logout('');
-$('#settingsBtn').onclick = openSettings;
-$('#vQuota').onclick = () => { if (state.view !== 'quota') setView('quota'); };
-$('#vRoster').onclick = () => { if (state.view !== 'roster') setView('roster'); };
 $('#lClose').onclick = closePanel;
-$('#adminsBtn').onclick = openAdmins;
 $('#aAdd').onclick = addAdmin;
 $('#aEmail').onkeydown = e => { if (e.key === 'Enter') addAdmin(); };
 $('#aClose').onclick = closePanel;
