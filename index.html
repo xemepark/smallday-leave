@@ -74,6 +74,28 @@
   .day.sel{outline:2px solid var(--ink);outline-offset:1px}
   .blank{visibility:hidden}
 
+  /* 月曆／清單切換 */
+  .viewsw{display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px;margin:0 0 10px}
+  .viewsw button{flex:1;border:0;background:none;border-radius:9px;padding:8px;font:inherit;font-weight:700;color:var(--sub);cursor:pointer}
+  .viewsw button.on{background:var(--ink);color:#fff}
+  /* 清單模式 */
+  .lopt{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);margin:0 2px 8px}
+  .list{display:flex;flex-direction:column;gap:6px}
+  .row{display:flex;align-items:center;gap:10px;width:100%;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:10px 12px;font:inherit;color:inherit;text-align:left;cursor:pointer}
+  .row .d{min-width:86px;font-weight:700}
+  .row.sat .d{color:var(--sat)} .row.sun .d{color:var(--sun)}
+  .row .b{font-size:13px;font-weight:700;border-radius:8px;padding:2px 8px}
+  .row .m{flex:1;text-align:right;font-size:12px;color:var(--sub)}
+  .row.open .b{background:var(--ok-bg);color:var(--ok)}
+  .row.full,.row.blocked{background:var(--full-bg)} .row.full .b{color:var(--full)} .row.blocked .b{color:var(--leave)}
+  .row.na .b{color:var(--full)}
+  .row.mine-leave{border-color:var(--leave)} .row.mine-leave .b{background:var(--leave);color:#fff}
+  .row.mine-mgr{border-color:var(--mgr)} .row.mine-mgr .b{background:var(--mgr-bg);color:var(--mgr);border:1px solid var(--mgr)}
+  .row.mine-other{border-color:var(--other)} .row.mine-other .b{background:var(--other-bg);color:var(--other)}
+  .row.holiday{background:#eaf3ec;border-color:#4f8a5b} .row.holiday .b{color:#4f8a5b}
+  .row.sel{outline:2px solid var(--ink);outline-offset:1px}
+  .list .none{color:var(--sub);font-size:14px;text-align:center;padding:16px 0}
+
   .warns{margin-top:14px;background:var(--other-bg);border-radius:12px;padding:10px 12px;font-size:13px;color:#7a5a17}
   .warns b{display:block;margin-bottom:4px}
   .warns ul{margin:0;padding-left:18px}
@@ -149,7 +171,12 @@
       <span><i style="background:#eaf3ec;border:1px solid #4f8a5b"></i>公司公休</span>
     </div>
 
+    <div class="viewsw" id="viewSw"><button data-v="cal">📅 月曆</button><button data-v="list">📋 清單</button></div>
     <div class="cal" id="cal"></div>
+    <div id="listWrap" class="hidden">
+      <label class="lopt"><input type="checkbox" id="onlyMine"> 只看我的排休</label>
+      <div class="list" id="list"></div>
+    </div>
 
     <div class="warns hidden" id="warns"><b>提醒</b><ul id="warnList"></ul></div>
 
@@ -176,7 +203,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '2.2.1';
+const VERSION = '2.3.0';
 const POLL_MS = 15000;
 const WEEK = '日一二三四五六';
 
@@ -235,6 +262,7 @@ const NAV = [
   { id: 'leave',    label: '我的劃假', href: 'index.html',         show: me => me.staff },
   { id: 'roster',   label: '排休總表', href: 'admin.html#roster',   show: me => me.admin },
   { id: 'quota',    label: '名額設定', href: 'admin.html#quota',    show: me => me.admin },
+  { id: 'rules',    label: '職務名額', href: 'admin.html#rules',    show: me => me.admin },
   { id: 'settings', label: '系統設定', href: 'admin.html#settings', show: me => me.admin },
   { id: 'admins',   label: '管理員',   href: 'admin.html#admins',   show: me => me.owner }
 ];
@@ -366,6 +394,8 @@ function render(d){
     cal.appendChild(b);
   });
 
+  renderList(d);
+
   const warns = d.warnings || [];
   $('#warns').classList.toggle('hidden', !warns.length);
   const ul = $('#warnList'); ul.textContent = '';
@@ -374,6 +404,30 @@ function render(d){
   $('#foot').textContent = '網頁 v' + VERSION + '・後端 v' + d.version + '・更新於 ' + d.serverTime.slice(11, 19);
 
   if (state.sel) fillSheet(state.sel);
+}
+
+/* ===== 清單模式 ===== */
+function renderList(d){
+  const v = state.view || 'cal';
+  document.querySelectorAll('#viewSw button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  $('#cal').classList.toggle('hidden', v !== 'cal');
+  $('#listWrap').classList.toggle('hidden', v !== 'list');
+  $('.legend').classList.toggle('hidden', v !== 'cal');
+  if (v !== 'list') return;
+  const only = $('#onlyMine').checked;
+  const box = $('#list'); box.textContent = '';
+  const days = d.days.filter(day => !only || day.mine || day.holiday);
+  days.forEach(day => {
+    const info = dayState(day);
+    const r = el('button', 'row ' + info.cls + (day.dow === 6 ? ' sat' : day.dow === 0 ? ' sun' : '') + (state.sel === day.date ? ' sel' : ''));
+    r.appendChild(el('span', 'd', Number(day.date.slice(5, 7)) + '/' + Number(day.date.slice(8)) + '（' + WEEK[day.dow] + '）'));
+    r.appendChild(el('span', 'b', info.cls === 'blocked' ? '禁休' : info.text));
+    const meta = day.holiday ? day.holiday : day.note ? day.note : (day.used ? '已排 ' + day.used + ' 人' : '');
+    r.appendChild(el('span', 'm', meta));
+    r.addEventListener('click', () => openSheet(day.date));
+    box.appendChild(r);
+  });
+  if (!days.length) box.appendChild(el('div', 'none', '這個月還沒有排休'));
 }
 
 function dayState(day){
@@ -484,6 +538,13 @@ function setBusy(b){ state.busy = b; $('#busy').classList.toggle('hidden', !b); 
 
 $('#backdrop').addEventListener('click', closeSheet);
 $('#logoutBtn').addEventListener('click', () => logout(''));
+// 月曆／清單切換，記住同仁上次選的
+try { state.view = localStorage.getItem('leaveView') || 'cal'; } catch(e){ state.view = 'cal'; }
+document.querySelectorAll('#viewSw button').forEach(b => b.addEventListener('click', () => {
+  state.view = b.dataset.v; try { localStorage.setItem('leaveView', state.view); } catch(e){}
+  if (state.data) renderList(state.data);
+}));
+$('#onlyMine').addEventListener('change', () => { if (state.data) renderList(state.data); });
 </script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoad()"></script>
 </body>
