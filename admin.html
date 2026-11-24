@@ -132,7 +132,7 @@
   .dlist .who button:hover{text-decoration:underline}
   .dlist .who small{color:var(--sub)}
   .dlist .none{color:var(--sub)}
-  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px}
+  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px}
   .stats div{background:var(--bg);border-radius:10px;padding:8px 4px;text-align:center}
   .stats b{display:block;font-size:20px}
   .stats small{color:var(--sub);font-size:11px}
@@ -244,8 +244,8 @@
     </div>
     <div id="rosterView" class="hidden">
       <div class="legend">
-        <span><span class="lv lv-自排">自</span> 自排（同仁自己挑，每月上限 5 天）</span>
-        <span><span class="lv lv-公排">排</span> 公排（公司排，不算進那 5 天）</span>
+        <span><span class="lv lv-自排">自</span> 自排（同仁自己挑，天數依職務設定）</span>
+        <span><span class="lv lv-公排">排</span> 公排（公司排，不算進自排天數）</span>
         <span><span class="lv lv-特休">特</span> 特休</span>
         <span><span class="lv lv-公休">休</span> 全公司公休</span>
       </div>
@@ -417,7 +417,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '2.3.0';
+const VERSION = '2.4.0';
 const WEEK = '日一二三四五六';
 const $ = s => document.querySelector(s);
 const state = { token: null, me: null, data: null, roster: null, view: 'quota', store: null, rStore: '全部', month: null, edit: null, leave: null, busy: false };
@@ -539,14 +539,15 @@ function renderRoster(r){
   const thead = el('thead'), hr = el('tr');
   hr.appendChild(el('th', 'rowhead', '同仁'));
   r.days.forEach(day => hr.appendChild(dayHead(day)));
-  hr.appendChild(el('th', '', '自排')); hr.appendChild(el('th', '', '公排')); hr.appendChild(el('th', '', '合計'));
+  const holCnt = r.days.filter(d => d.holiday).length;
+  hr.appendChild(el('th', '', '自排')); hr.appendChild(el('th', '', '公排')); hr.appendChild(el('th', '', '公休')); hr.appendChild(el('th', '', '合計'));
   thead.appendChild(hr); t.appendChild(thead);
   const tb = el('tbody'); let lastRole = null;
   const perDay = r.days.map(() => 0);
   people.forEach(p => {
     if (p.role !== lastRole){
       lastRole = p.role;
-      const g = el('tr', 'grp'); const th = el('th', '', p.role); th.colSpan = r.days.length + 4; g.appendChild(th); tb.appendChild(g);
+      const g = el('tr', 'grp'); const th = el('th', '', p.role); th.colSpan = r.days.length + 5; g.appendChild(th); tb.appendChild(g);
     }
     const tr = el('tr');
     const head = el('th', 'rowhead');
@@ -573,15 +574,15 @@ function renderRoster(r){
     });
     const mxS = p.maxSelf != null ? p.maxSelf : r.maxLeave;
     const s1 = el('td', 'sum', cLeave + ' / ' + mxS); if (cLeave > mxS) s1.style.color = 'var(--accent)';
-    tr.appendChild(s1); tr.appendChild(el('td', 'sum', p.maxMgr ? cMgr + ' / ' + p.maxMgr : String(cMgr))); tr.appendChild(el('td', 'sum', String(cAll)));
+    tr.appendChild(s1); tr.appendChild(el('td', 'sum', p.maxMgr ? cMgr + ' / ' + p.maxMgr : String(cMgr))); tr.appendChild(el('td', 'sum', String(holCnt))); tr.appendChild(el('td', 'sum', String(cAll + holCnt)));
     tb.appendChild(tr);
   });
-  if (!people.length){ const tr = el('tr'); const td = el('td', '', '這間門市沒有人員'); td.colSpan = r.days.length + 4; td.style.padding = '16px'; tr.appendChild(td); tb.appendChild(tr); }
+  if (!people.length){ const tr = el('tr'); const td = el('td', '', '這間門市沒有人員'); td.colSpan = r.days.length + 5; td.style.padding = '16px'; tr.appendChild(td); tb.appendChild(tr); }
   t.appendChild(tb);
   const tf = el('tfoot'), fr = el('tr');
   fr.appendChild(el('th', 'rowhead', '當天休假人數'));
   perDay.forEach(n => fr.appendChild(el('td', '', n ? String(n) : '')));
-  fr.appendChild(el('td')); fr.appendChild(el('td')); fr.appendChild(el('td'));
+  fr.appendChild(el('td')); fr.appendChild(el('td')); fr.appendChild(el('td')); fr.appendChild(el('td'));
   tf.appendChild(fr); t.appendChild(tf);
   $('#foot').textContent = '管理後台 v' + VERSION + '・後端 v' + r.version + '・更新於 ' + r.serverTime.slice(11, 19);
   if (state.leave) fillLeave();
@@ -857,7 +858,7 @@ function openPerson(key){
   const hol = r.days.filter(d => d.holiday).length;
   const st = $('#ppStats'); st.textContent = '';
   const mxS = p.maxSelf != null ? p.maxSelf : r.maxLeave, mxM = p.maxMgr || 0, mg = cnt(T_MGR);
-  [[leave + ' / ' + mxS, '自排', leave > mxS], [mxM ? mg + ' / ' + mxM : String(mg), '公排', mxM && mg > mxM], [String(wk), '週末自選', false], [String(days.length + hol), '合計放假' , false]]
+  [[leave + ' / ' + mxS, '自排', leave > mxS], [mxM ? mg + ' / ' + mxM : String(mg), '公排', mxM && mg > mxM], [String(hol), '公休', false], [String(wk), '週末自選', false], [String(days.length + hol), '合計放假' , false]]
     .forEach(([v, l, over]) => { const d = el('div', over ? 'over' : ''); d.appendChild(el('b', '', v)); d.appendChild(el('small', '', l)); st.appendChild(d); });
   const ul = $('#ppList'); ul.textContent = '';
   r.days.filter(d => mine[d.date] || d.holiday).forEach(d => {
