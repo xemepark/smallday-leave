@@ -134,6 +134,20 @@
   .dlist .who button:hover{text-decoration:underline}
   .dlist .who small{color:var(--sub)}
   .dlist .none{color:var(--sub)}
+  .dlist li.go{background:#e6effa;cursor:pointer;color:#2f5f91;font-weight:700}
+  .dlist li.go:active{opacity:.7}
+  /* 幫同仁排假的小月曆 */
+  .pphint{font-size:13px;color:var(--sub);margin:0 0 8px}
+  .pphint b{color:var(--ink)}
+  .pcal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:12px}
+  .pcal .dw{text-align:center;font-size:11px;color:var(--sub)}
+  .pcal .dw.sat{color:var(--sat)} .pcal .dw.sun{color:var(--sun)}
+  .pcal button{border:1px solid var(--line);background:var(--card);border-radius:9px;min-height:50px;padding:3px 0;font:inherit;font-size:14px;font-weight:700;color:var(--ink);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:2px}
+  .pcal button.sat{color:var(--sat)} .pcal button.sun{color:var(--sun)}
+  .pcal button.blk{box-shadow:inset 0 0 0 2px var(--accent)}
+  .pcal button.hol{background:#eaf3ec;cursor:default}
+  .pcal button .lv{font-size:11px;min-width:20px;padding:0 3px}
+  .pcal button small{font-size:9px;font-weight:600;color:var(--accent)}
   .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px}
   .stats div{background:var(--bg);border-radius:10px;padding:8px 4px;text-align:center}
   .stats b{display:block;font-size:20px}
@@ -398,7 +412,12 @@
   <div class="meta" id="ppMeta"></div>
   <div class="stats" id="ppStats"></div>
   <ul class="dlist" id="ppList"></ul>
-  <div class="btns"><button class="btn ghost" id="ppClose">關閉</button></div>
+  <div id="ppPick" class="hidden">
+    <p class="pphint" id="ppHint"></p>
+    <div class="pcal" id="ppCal"></div>
+    <div class="confirmbox hidden" id="ppConfirm"><b>要注意：</b><span id="ppIssues"></span><div class="btns" id="ppConfirmBtns" style="margin-top:8px"></div></div>
+  </div>
+  <div class="btns"><button class="btn primary" id="ppPickBtn">📅 幫他排假</button><button class="btn ghost" id="ppClose">關閉</button></div>
 </div>
 
 <div id="rulesPanel" class="modal" role="dialog" aria-modal="true">
@@ -419,7 +438,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '2.5.0';
+const VERSION = '2.6.0';
 const WEEK = '日一二三四五六';
 const $ = s => document.querySelector(s);
 const state = { token: null, me: null, data: null, roster: null, view: 'quota', store: null, rStore: '全部', month: null, edit: null, leave: null, busy: false };
@@ -618,7 +637,8 @@ async function setLeave(type, force){
   setBusy(true);
   try {
     const d = await api('adminSetLeave', { key: state.leave.key, date: state.leave.date, type, force });
-    renderRoster(d); closePanel(); toast(d.message || '已更新');
+    const back = state.leave && state.leave.back;
+    renderRoster(d); closePanel(); if (back) openPerson(back, true); toast(d.message || '已更新');
   } catch(e){
     if (e.code === 'NEED_CONFIRM'){
       $('#lIssues').textContent = e.message;
@@ -846,8 +866,9 @@ function fillList(){
   });
   if (!shown) ul.appendChild(el('li', 'none', '這個月還沒有人排休'));
 }
-function openPerson(key){
+function openPerson(key, pick){
   closePanel(true);
+  state.pick = pick ? key : null; state.pickKey = key;
   const r = state.roster, p = r.people.find(x => x.key === key); if (!p) return;
   const mine = r.leaves[key] || {};
   const [y, m] = r.month.split('-');
@@ -875,13 +896,64 @@ function openPerson(key){
     li.appendChild(w); ul.appendChild(li);
   });
   if (!ul.children.length) ul.appendChild(el('li', 'none', '這個月還沒有排休'));
-  if (mxM && mg < mxM){ const li = el('li'); li.appendChild(el('span', 'none', '👉 還要幫他排 ' + (mxM - mg) + ' 天公排')); ul.appendChild(li); }
+  if (mxM && mg < mxM){
+    // 點這行直接打開小月曆幫他排公排
+    const li = el('li', 'go', '👉 還要幫他排 ' + (mxM - mg) + ' 天公排（點這裡排）');
+    li.onclick = () => openPerson(key, true); ul.appendChild(li);
+  }
   // 連休、連續上班提醒
   const offSet = {}; r.days.forEach(d => { if (mine[d.date] || d.holiday) offSet[d.date] = true; });
   let run = 0, maxWork = 0, work = 0;
   r.days.forEach(d => { if (offSet[d.date]){ work = 0; } else { work++; maxWork = Math.max(maxWork, work); } });
   if (maxWork > 6){ const li = el('li'); li.appendChild(el('span', 'none', '⚠️ 這個月最長連續上班 ' + maxWork + ' 天（超過 6 天）')); ul.appendChild(li); }
+  ul.classList.toggle('hidden', !!pick);
+  $('#ppPick').classList.toggle('hidden', !pick);
+  $('#ppPickBtn').classList.toggle('hidden', !!pick);
+  $('#ppConfirm').classList.add('hidden');
+  if (pick){
+    const left = mxM ? Math.max(0, mxM - mg) : 0;
+    $('#ppHint').innerHTML = '點空白的日子＝排<b>公排</b>，再點一次＝取消。'
+      + (mxM ? (left ? '還要排 <b>' + left + '</b> 天。' : '<b>公排已經排滿了 ✓</b>') : '')
+      + (maxWork > 6 ? '<br>⚠️ 目前最長連續上班 <b>' + maxWork + '</b> 天' : '');
+    const cal = $('#ppCal'); cal.textContent = '';
+    [...WEEK].forEach((w, i) => cal.appendChild(el('div', 'dw' + (i === 6 ? ' sat' : i === 0 ? ' sun' : ''), w)));
+    for (let i = 0; i < r.days[0].dow; i++) cal.appendChild(el('div'));
+    r.days.forEach(d => {
+      const t = mine[d.date];
+      const b = el('button', (d.dow === 6 ? 'sat' : d.dow === 0 ? 'sun' : '') + (d.holiday ? ' hol' : d.block ? ' blk' : ''), String(Number(d.date.slice(8))));
+      if (d.holiday) b.appendChild(el('span', 'lv lv-公休', '休'));
+      else if (t) b.appendChild(el('span', lvClass(t), lvShort(t)));
+      else if (d.block) b.appendChild(el('small', '', '禁休'));
+      b.onclick = () => {
+        if (d.holiday) return toast('這天全公司公休');
+        if (!t) return pickSet(key, d.date, T_MGR, false);
+        if (t === T_MGR) return pickSet(key, d.date, null, false);
+        const back = key; $('#personPanel').classList.remove('show');
+        openLeave(p, d); state.leave.back = back;   // 自排、特休：打開一般的排休面板，改完回到小月曆
+      };
+      cal.appendChild(b);
+    });
+  }
   $('#backdrop').classList.add('show'); $('#personPanel').classList.add('show');
+}
+async function pickSet(key, date, type, force){
+  if (state.busy) return;
+  setBusy(true);
+  try {
+    const d = await api('adminSetLeave', { key, date, type, force });
+    renderRoster(d); openPerson(key, true);
+    toast(type ? Number(date.slice(5, 7)) + '/' + Number(date.slice(8)) + ' 排了公排' : '已取消');
+  } catch(e){
+    if (e.code === 'NEED_CONFIRM'){
+      $('#ppIssues').textContent = e.message;
+      const cb = $('#ppConfirmBtns'); cb.textContent = '';
+      const go = el('button', 'btn primary', '仍要排'); go.onclick = () => pickSet(key, date, type, true);
+      const no = el('button', 'btn ghost', '不要'); no.onclick = () => $('#ppConfirm').classList.add('hidden');
+      cb.appendChild(go); cb.appendChild(no);
+      $('#ppConfirm').classList.remove('hidden');
+      $('#ppConfirm').scrollIntoView({ block: 'nearest' });
+    } else handleError(e);
+  } finally { setBusy(false); }
 }
 
 /* ===== 職務與每日名額 ===== */
@@ -1138,6 +1210,7 @@ $('#byDateBtn').onclick = openList;
 $('#liOnly').onchange = fillList;
 $('#liClose').onclick = closePanel;
 $('#ppClose').onclick = closePanel;
+$('#ppPickBtn').onclick = () => { if (state.pickKey) openPerson(state.pickKey, true); };
 $('#dSave').onclick = saveDay;
 document.querySelectorAll('input[name=dmode]').forEach(r => r.onchange = syncDayMode);
 </script>
