@@ -25,6 +25,15 @@
   header{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:12px}
   .who{font-size:12px;color:var(--sub);text-align:right}
   .setbtn{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 14px;font:inherit;font-weight:600;color:var(--ink);cursor:pointer;margin-bottom:4px}
+  .badge{display:inline-block;font-size:11px;border-radius:999px;padding:1px 8px;background:var(--bg);border:1px solid var(--line);color:var(--sub)}
+  .badge.owner{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .alist{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:6px}
+  .alist li{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg);border-radius:10px;padding:8px 12px;word-break:break-all}
+  .alist li small{color:var(--sub);white-space:nowrap}
+  .alist button{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:4px 10px;font:inherit;font-size:12px;color:var(--accent);cursor:pointer;white-space:nowrap}
+  .addrow{display:flex;gap:8px;margin-bottom:8px}
+  .addrow .text{flex:1}
+  .addrow button{border:0;border-radius:10px;padding:0 16px;font:inherit;font-weight:700;background:var(--accent);color:#fff;cursor:pointer}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .grid2>div{min-width:0}
   input[type=datetime-local].text{min-width:0;font-size:13px;padding:9px 6px}
@@ -126,7 +135,7 @@
   <section id="app" class="hidden">
     <header>
       <div><div class="brand">小日子劃假系統</div><h1>名額管理</h1></div>
-      <div class="who"><button class="setbtn" id="settingsBtn">⚙ 系統設定</button><br><span id="who"></span>・<button class="link" id="logoutBtn">登出</button></div>
+      <div class="who"><button class="setbtn hidden" id="adminsBtn">👥 管理員</button> <button class="setbtn" id="settingsBtn">⚙ 系統設定</button><br><span class="badge" id="roleBadge"></span> <span id="who"></span>・<button class="link" id="logoutBtn">登出</button></div>
     </header>
 
     <div class="bar">
@@ -219,6 +228,18 @@
   </div>
 </div>
 
+<div id="adminPanel" class="modal" role="dialog" aria-modal="true">
+  <h2>管理員</h2>
+  <div class="meta">管理員可以設定名額和系統設定；只有系統擁有者可以新增或移除管理員</div>
+  <ul class="alist" id="aList"></ul>
+  <div class="addrow">
+    <input class="text" id="aEmail" type="email" placeholder="輸入對方的 Gmail" autocomplete="off">
+    <button id="aAdd">新增</button>
+  </div>
+  <div class="subnote" style="margin-bottom:14px">提醒：登入設定還在「測試版」時，新管理員的 Gmail 也要加進 Google Cloud 的「測試使用者」，否則會登不進來。</div>
+  <div class="btns"><button class="btn ghost" id="aClose">關閉</button></div>
+</div>
+
 <div id="toast"></div>
 <div id="busy" class="hidden"><div class="spin"></div></div>
 
@@ -227,7 +248,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 const WEEK = '日一二三四五六';
 const $ = s => document.querySelector(s);
 const state = { token: null, data: null, store: null, month: null, edit: null, busy: false };
@@ -280,6 +301,11 @@ function render(d){
   if (!state.store || d.stores.indexOf(state.store) < 0) state.store = d.stores[0];
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
   $('#who').textContent = d.admin;
+  const isOwner = d.role === 'owner';
+  $('#roleBadge').textContent = isOwner ? '系統擁有者' : '管理員';
+  $('#roleBadge').className = 'badge' + (isOwner ? ' owner' : '');
+  $('#adminsBtn').classList.toggle('hidden', !isOwner);
+  if ($('#adminPanel').classList.contains('show')) fillAdmins();
   const [y, m] = d.month.split('-');
   $('#monthLabel').textContent = y + ' 年 ' + Number(m) + ' 月';
   $('#bookingTag').innerHTML = '';
@@ -367,7 +393,41 @@ function openPanel(role, i){
 
   $('#backdrop').classList.add('show'); $('#panel').classList.add('show');
 }
-function closePanel(){ state.edit = null; $('#backdrop').classList.remove('show'); $('#panel').classList.remove('show'); $('#setPanel').classList.remove('show'); }
+function closePanel(){ state.edit = null; $('#backdrop').classList.remove('show'); ['#panel', '#setPanel', '#adminPanel'].forEach(id => $(id).classList.remove('show')); }
+
+/* ===== 管理員（只有系統擁有者） ===== */
+function openAdmins(){
+  fillAdmins();
+  $('#aEmail').value = '';
+  $('#backdrop').classList.add('show'); $('#adminPanel').classList.add('show');
+}
+function fillAdmins(){
+  const d = state.data, ul = $('#aList'); ul.textContent = '';
+  const own = el('li'); own.append(el('span', '', d.owner)); own.append(el('small', '', '系統擁有者（不能移除）')); ul.appendChild(own);
+  (d.admins || []).forEach(e => {
+    const li = el('li'); li.append(el('span', '', e));
+    const b = el('button', '', '移除');
+    b.onclick = () => {
+      if (b.dataset.confirm){ saveAdmins(d.admins.filter(x => x !== e)); return; }
+      b.dataset.confirm = '1'; b.textContent = '確定移除？';
+    };
+    li.append(b); ul.appendChild(li);
+  });
+  if (!(d.admins || []).length) ul.appendChild(el('li', '', '目前沒有其他管理員'));
+}
+function addAdmin(){
+  const e = $('#aEmail').value.trim().toLowerCase();
+  if (!/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(e)){ toast('請輸入正確的 Email', true); return; }
+  if (e === state.data.owner || (state.data.admins || []).indexOf(e) >= 0){ toast('這個帳號已經有權限了', true); return; }
+  saveAdmins((state.data.admins || []).concat([e]));
+}
+async function saveAdmins(list){
+  if (state.busy) return;
+  setBusy(true);
+  try { const d = await api('adminSetAdmins', { admins: list }); render(d); $('#aEmail').value = ''; fillAdmins(); toast(d.message || '已更新'); }
+  catch(e){ handleError(e); }
+  finally { setBusy(false); }
+}
 
 /* ===== 系統設定 ===== */
 function addMonths(mo, n){ const [y, m] = mo.split('-').map(Number); const t = new Date(y, m - 1 + n, 1); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0'); }
@@ -463,6 +523,10 @@ $('#cancelBtn').onclick = closePanel;
 $('#backdrop').onclick = closePanel;
 $('#logoutBtn').onclick = () => logout('');
 $('#settingsBtn').onclick = openSettings;
+$('#adminsBtn').onclick = openAdmins;
+$('#aAdd').onclick = addAdmin;
+$('#aEmail').onkeydown = e => { if (e.key === 'Enter') addAdmin(); };
+$('#aClose').onclick = closePanel;
 $('#sStart').onchange = updatePreview;
 $('#sCount').onchange = updatePreview;
 $('#sSave').onclick = saveSettings;
