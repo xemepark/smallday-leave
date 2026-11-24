@@ -439,7 +439,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '2.6.1';
+const VERSION = '2.6.2';
 const WEEK = '日一二三四五六';
 const $ = s => document.querySelector(s);
 const state = { token: null, me: null, data: null, roster: null, view: 'quota', store: null, rStore: '全部', month: null, edit: null, leave: null, busy: false };
@@ -465,6 +465,10 @@ function setToken(t){ state.token = t; store.set('token', t); start(); }
 /** 先確認身分：沒有管理權限的人送回劃假頁 */
 async function start(){
   setBusy(true);
+  // 一進來就同時抓資料，不用等確認身分完再一個一個抓（快很多）
+  const h0 = location.hash.slice(1);
+  const quiet = p => { p.catch(() => {}); return p; };
+  state.prefetch = { month: state.month, load: quiet(api('adminLoad', { month: state.month })), roster: h0 === 'roster' ? quiet(api('adminRoster', { month: state.month })) : null };
   try {
     state.me = await api('whoami');
     if (!state.me.admin){ location.replace('index.html'); return; }
@@ -526,10 +530,17 @@ async function load(month){
   setBusy(true);
   try {
     const m = month || state.month;
+    // 先用一進來就預先抓好的資料
+    const pf = state.prefetch && state.prefetch.month === m ? state.prefetch : null;
+    state.prefetch = null;
+    const getLoad = () => (pf && pf.load) || api('adminLoad', { month: m });
     if (state.view === 'roster'){
-      if (!state.data) render(await api('adminLoad', { month: m }));
-      renderRoster(await api('adminRoster', { month: m }));
-    } else render(await api('adminLoad', { month: m }));
+      // 兩份資料同時抓
+      const pl = state.data ? null : getLoad();
+      const pr = (pf && pf.roster) || api('adminRoster', { month: m });
+      if (pl) render(await pl);
+      renderRoster(await pr);
+    } else render(await getLoad());
   }
   catch(e){ handleError(e); }
   finally { setBusy(false); }
