@@ -116,6 +116,25 @@
   .dmode label.on{border-color:var(--ink)}
   .dmode input{margin-top:3px}
   .dmode small{display:block;color:var(--sub)}
+  .rtools{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+  .rtools button{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:7px 14px;font:inherit;font-weight:600;color:var(--ink);cursor:pointer}
+  #roster .rowhead{cursor:pointer}
+  #roster .rowhead:hover span{text-decoration:underline}
+  .dlist{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:6px}
+  .dlist li{background:var(--bg);border-radius:10px;padding:8px 12px;display:flex;gap:10px;align-items:flex-start}
+  .dlist .d{min-width:74px;font-weight:700;white-space:nowrap}
+  .dlist .d.sat{color:var(--sat)} .dlist .d.sun{color:var(--sun)}
+  .dlist .who{display:flex;flex-wrap:wrap;gap:4px 10px;flex:1}
+  .dlist .who button{border:0;background:none;padding:0;font:inherit;color:var(--ink);cursor:pointer;text-align:left}
+  .dlist .who button:hover{text-decoration:underline}
+  .dlist .who small{color:var(--sub)}
+  .dlist .none{color:var(--sub)}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px}
+  .stats div{background:var(--bg);border-radius:10px;padding:8px 4px;text-align:center}
+  .stats b{display:block;font-size:20px}
+  .stats small{color:var(--sub);font-size:11px}
+  .stats .over b{color:var(--accent)}
+  .dayppl{margin-bottom:12px}
   footer{text-align:center;color:var(--sub);font-size:11px;margin-top:16px}
 
   /* 編輯面板 */
@@ -202,6 +221,10 @@
         <span><span class="lv lv-可休">可</span> 可休（主管排）</span>
         <span><span class="lv lv-特休">特</span> 特休</span>
         <span><span class="lv lv-公休">公</span> 全公司公休</span>
+      </div>
+      <div class="rtools">
+        <button id="byDateBtn">📅 依日期列出：每天誰休</button>
+        <span class="tag" style="align-self:center">點同仁名字＝看他這個月的排休</span>
       </div>
       <div class="tablewrap"><table id="roster"></table></div>
       <div class="hint">點任一格就能幫同仁排休、改類型或取消；點上面的日期可以設定全公司禁休或公休。超過名額或個人上限時會先提醒，確認後才會排。黃色名字＝還沒填 Gmail，不能自己登入劃假。</div>
@@ -306,6 +329,7 @@
 
 <div id="dayPanel" class="modal" role="dialog" aria-modal="true">
   <h2 id="dTitle"></h2>
+  <div class="dayppl hidden" id="dPeople"></div>
   <div class="meta">整天的設定，套用到全公司所有門市、所有職位</div>
   <div class="dmode" id="dModes">
     <label><input type="radio" name="dmode" value="normal"><span><b>正常</b><small>照「名額規則」和各職位的名額設定</small></span></label>
@@ -326,6 +350,22 @@
   </div>
 </div>
 
+<div id="listPanel" class="modal" role="dialog" aria-modal="true">
+  <h2 id="liTitle"></h2>
+  <div class="meta" id="liMeta"></div>
+  <label class="check"><input type="checkbox" id="liOnly" checked><span>只列有人排休的日子</span></label>
+  <ul class="dlist" id="liList"></ul>
+  <div class="btns"><button class="btn ghost" id="liClose">關閉</button></div>
+</div>
+
+<div id="personPanel" class="modal" role="dialog" aria-modal="true">
+  <h2 id="ppTitle"></h2>
+  <div class="meta" id="ppMeta"></div>
+  <div class="stats" id="ppStats"></div>
+  <ul class="dlist" id="ppList"></ul>
+  <div class="btns"><button class="btn ghost" id="ppClose">關閉</button></div>
+</div>
+
 <div id="toast"></div>
 <div id="busy" class="hidden"><div class="spin"></div></div>
 
@@ -334,7 +374,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '1.6.0';
+const VERSION = '1.7.0';
 const WEEK = '日一二三四五六';
 const $ = s => document.querySelector(s);
 const state = { token: null, me: null, data: null, roster: null, view: 'quota', store: null, rStore: '全部', month: null, edit: null, leave: null, busy: false };
@@ -466,6 +506,8 @@ function renderRoster(r){
     const head = el('th', 'rowhead');
     head.appendChild(el('span', p.hasEmail ? '' : 'noemail', p.name + (p.inactive ? '（停用）' : '')));
     head.appendChild(el('small', '', p.store));
+    head.title = '看 ' + p.name + ' 這個月的排休';
+    head.onclick = () => openPerson(p.key);
     tr.appendChild(head);
     const mine = r.leaves[p.key] || {};
     let cLeave = 0, cMgr = 0, cAll = 0;
@@ -639,7 +681,7 @@ function openPanel(role, i){
 function closePanel(silent){
   state.edit = null; state.leave = null;
   $('#backdrop').classList.remove('show');
-  ['#panel', '#setPanel', '#adminPanel', '#leavePanel', '#dayPanel'].forEach(id => $(id).classList.remove('show'));
+  ['#panel', '#setPanel', '#adminPanel', '#leavePanel', '#dayPanel', '#listPanel', '#personPanel'].forEach(id => $(id).classList.remove('show'));
   // 關掉「系統設定」「管理員」面板時，網址和選單回到目前的畫面
   const h = location.hash.slice(1);
   if (silent !== true && (h === 'settings' || h === 'admins')){
@@ -666,6 +708,16 @@ function openDay(day){
   document.querySelector('input[name=dmode][value=' + mode + ']').checked = true;
   $('#dNote').value = day.holiday || (day.block && day.block !== '全公司禁休' ? day.block : '');
   $('#dEnd').value = day.date; $('#dEnd').min = day.date;
+  const box = $('#dPeople'); box.textContent = '';
+  const r = state.roster;
+  if (state.view === 'roster' && r && r.days.some(x => x.date === day.date)){
+    box.classList.remove('hidden');
+    const off = whoOff(day.date);
+    box.appendChild(el('div', 'meta', day.holiday ? '全公司公休（' + day.holiday + '）' : '這天排休的人（' + off.length + ' 位）'));
+    if (!day.holiday){
+      const ul = el('ul', 'dlist'); const li = el('li'); li.appendChild(whoLine(off)); ul.appendChild(li); box.appendChild(ul);
+    }
+  } else box.classList.add('hidden');
   syncDayMode();
   $('#backdrop').classList.add('show'); $('#dayPanel').classList.add('show');
 }
@@ -694,6 +746,78 @@ async function saveDay(){
     closePanel(); toast(d.message || '已儲存');
   } catch(e){ handleError(e); }
   finally { setBusy(false); }
+}
+
+/* ===== 排休清單：依日期、依同仁 ===== */
+function mdw(date, dow){ return Number(date.slice(5, 7)) + '/' + Number(date.slice(8)) + '（' + WEEK[dow] + '）'; }
+function rosterPeople(){ const r = state.roster; return r.people.filter(p => state.rStore === '全部' || p.store === state.rStore); }
+function whoOff(date){
+  const r = state.roster;
+  return rosterPeople().filter(p => (r.leaves[p.key] || {})[date]).map(p => ({ p, type: r.leaves[p.key][date] }));
+}
+function whoLine(off){
+  const w = el('div', 'who');
+  if (!off.length){ w.appendChild(el('span', 'none', '沒有人排休')); return w; }
+  off.forEach(o => {
+    const b = el('button');
+    b.appendChild(el('span', lvClass(o.type), lvShort(o.type))); b.append(' ' + o.p.name + ' ');
+    b.appendChild(el('small', '', o.p.store + '・' + o.p.role));
+    b.onclick = () => openPerson(o.p.key);
+    w.appendChild(b);
+  });
+  return w;
+}
+function openList(){ closePanel(true); fillList(); $('#backdrop').classList.add('show'); $('#listPanel').classList.add('show'); }
+function fillList(){
+  const r = state.roster; if (!r) return;
+  const [y, m] = r.month.split('-');
+  $('#liTitle').textContent = y + ' 年 ' + Number(m) + ' 月・每天誰休';
+  $('#liMeta').textContent = (state.rStore === '全部' ? '全部門市' : state.rStore) + '・點名字可以看那位同仁整個月的排休';
+  const ul = $('#liList'); ul.textContent = '';
+  let shown = 0;
+  r.days.forEach(day => {
+    const off = day.holiday ? [] : whoOff(day.date);
+    if ($('#liOnly').checked && !off.length && !day.holiday) return;
+    shown++;
+    const li = el('li');
+    li.appendChild(el('span', 'd' + (day.dow === 6 ? ' sat' : day.dow === 0 ? ' sun' : ''), mdw(day.date, day.dow)));
+    if (day.holiday){ const w = el('div', 'who'); w.appendChild(el('span', 'lv lv-公休', '公')); w.append(' 全公司公休・' + day.holiday); li.appendChild(w); }
+    else li.appendChild(whoLine(off));
+    ul.appendChild(li);
+  });
+  if (!shown) ul.appendChild(el('li', 'none', '這個月還沒有人排休'));
+}
+function openPerson(key){
+  closePanel(true);
+  const r = state.roster, p = r.people.find(x => x.key === key); if (!p) return;
+  const mine = r.leaves[key] || {};
+  const [y, m] = r.month.split('-');
+  $('#ppTitle').textContent = p.name + '・' + Number(m) + ' 月排休';
+  $('#ppMeta').textContent = p.store + '・' + p.role + (p.hasEmail ? '' : '・還沒填 Gmail') + (p.inactive ? '・已停用' : '');
+  const days = r.days.filter(d => mine[d.date]);
+  const cnt = t => days.filter(d => mine[d.date] === t).length;
+  const leave = cnt('休假');
+  const wk = days.filter(d => mine[d.date] === '休假' && (d.dow === 0 || d.dow === 6)).length;
+  const hol = r.days.filter(d => d.holiday).length;
+  const st = $('#ppStats'); st.textContent = '';
+  [[leave + ' / ' + r.maxLeave, '指定假', leave > r.maxLeave], [String(wk), '週末自選', false], [String(cnt('可休')), '可休', false], [String(days.length + hol), '合計放假' , false]]
+    .forEach(([v, l, over]) => { const d = el('div', over ? 'over' : ''); d.appendChild(el('b', '', v)); d.appendChild(el('small', '', l)); st.appendChild(d); });
+  const ul = $('#ppList'); ul.textContent = '';
+  r.days.filter(d => mine[d.date] || d.holiday).forEach(d => {
+    const li = el('li');
+    li.appendChild(el('span', 'd' + (d.dow === 6 ? ' sat' : d.dow === 0 ? ' sun' : ''), mdw(d.date, d.dow)));
+    const w = el('div', 'who');
+    if (d.holiday){ w.appendChild(el('span', 'lv lv-公休', '公')); w.append(' 全公司公休・' + d.holiday); }
+    else { const t = mine[d.date]; w.appendChild(el('span', lvClass(t), lvShort(t))); w.append(' ' + t); }
+    li.appendChild(w); ul.appendChild(li);
+  });
+  if (!ul.children.length) ul.appendChild(el('li', 'none', '這個月還沒有排休'));
+  // 連休、連續上班提醒
+  const offSet = {}; r.days.forEach(d => { if (mine[d.date] || d.holiday) offSet[d.date] = true; });
+  let run = 0, maxWork = 0, work = 0;
+  r.days.forEach(d => { if (offSet[d.date]){ work = 0; } else { work++; maxWork = Math.max(maxWork, work); } });
+  if (maxWork > 6){ const li = el('li'); li.appendChild(el('span', 'none', '⚠️ 這個月最長連續上班 ' + maxWork + ' 天（超過 6 天）')); ul.appendChild(li); }
+  $('#backdrop').classList.add('show'); $('#personPanel').classList.add('show');
 }
 
 /* ===== 管理員（只有系統擁有者） ===== */
@@ -832,6 +956,10 @@ $('#sCount').onchange = updatePreview;
 $('#sSave').onclick = saveSettings;
 $('#sCancel').onclick = closePanel;
 $('#dCancel').onclick = closePanel;
+$('#byDateBtn').onclick = openList;
+$('#liOnly').onchange = fillList;
+$('#liClose').onclick = closePanel;
+$('#ppClose').onclick = closePanel;
 $('#dSave').onclick = saveDay;
 document.querySelectorAll('input[name=dmode]').forEach(r => r.onchange = syncDayMode);
 </script>
