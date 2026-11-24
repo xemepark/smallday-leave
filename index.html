@@ -69,6 +69,7 @@
   .day.mine-leave{background:var(--leave);border-color:var(--leave)}
   .day.mine-leave .n,.day.mine-leave .t{color:#fff}
   .day.mine-mgr{background:var(--mgr-bg);border-color:var(--mgr)} .day.mine-mgr .t{color:var(--mgr);font-weight:700}
+  .day.holiday{background:#eaf3ec;border-color:#4f8a5b} .day.holiday .t{color:#4f8a5b;font-weight:700}
   .day.mine-other{background:var(--other-bg);border-color:var(--other)} .day.mine-other .t{color:var(--other);font-weight:700}
   .day.sel{outline:2px solid var(--ink);outline-offset:1px}
   .blank{visibility:hidden}
@@ -144,6 +145,7 @@
       <span><i style="background:var(--mgr-bg);border:1px solid var(--mgr)"></i>主管排可休</span>
       <span><i style="background:var(--ok-bg);border:1px solid var(--ok)"></i>還有名額</span>
       <span><i style="background:var(--full-bg)"></i>額滿／禁休</span>
+      <span><i style="background:#eaf3ec;border:1px solid #4f8a5b"></i>公司公休</span>
     </div>
 
     <div class="cal" id="cal"></div>
@@ -173,7 +175,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '1.5.0';
+const VERSION = '1.6.0';
 const POLL_MS = 15000;
 const WEEK = '日一二三四五六';
 
@@ -374,6 +376,7 @@ function render(d){
 }
 
 function dayState(day){
+  if (day.holiday) return { cls: 'holiday', text: '公休' };
   if (day.mine === '休假') return { cls: 'mine-leave', text: '休假' };
   if (day.mine === '可休') return { cls: 'mine-mgr', text: '可休' };
   if (day.mine) return { cls: 'mine-other', text: day.mine };
@@ -408,7 +411,7 @@ function fillSheet(date){
   if (!day) return;
   const md = Number(date.slice(5, 7)) + '/' + Number(date.slice(8));
   $('#sTitle').textContent = md + '（' + WEEK[day.dow] + '）';
-  $('#sMeta').textContent = day.quota === null
+  $('#sMeta').textContent = day.holiday ? '全公司公休・' + day.holiday : day.quota === null
     ? '這天沒有設定' + d.me.role + '的名額'
     : d.me.role + '・' + day.scope + '・名額 ' + day.quota + ' 人，已排 ' + day.used + ' 人';
   $('#sNote').classList.toggle('hidden', !day.note);
@@ -428,6 +431,7 @@ function fillSheet(date){
 
   const disable = (label, why) => { btn.textContent = label; btn.disabled = true; hint.textContent = why || ''; };
 
+  if (day.holiday) return disable('全公司公休', '這天大家統一放假（' + day.holiday + '），不用劃，也不佔指定假');
   if (day.mine === '休假'){
     if (d.window.status !== 'open') return disable('取消這天', '不在劃假時間，要調整請找人換班並經主管同意');
     btn.className = 'btn danger' + (state.confirmCancel ? ' confirm' : '');
