@@ -98,6 +98,7 @@
   .btn.danger{background:var(--card);color:var(--leave);border:1.5px solid var(--leave)}
   .btn.danger.confirm{background:var(--leave);color:#fff}
   .btn:disabled{background:var(--full-bg);color:var(--sub);cursor:default}
+  .btn.off{background:var(--full-bg);color:var(--sub)}
   .hint{font-size:13px;color:var(--sub);text-align:center;margin-top:8px}
 
   #toast{position:fixed;left:50%;top:14px;transform:translate(-50%,calc(-100% - 30px));background:var(--ink);color:#fff;
@@ -175,7 +176,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '2.1.0';
+const VERSION = '2.2.0';
 const POLL_MS = 15000;
 const WEEK = '日一二三四五六';
 
@@ -432,7 +433,8 @@ function fillSheet(date){
   const isWeekend = day.dow === 0 || day.dow === 6;
   btn.className = 'btn'; btn.disabled = false; hint.textContent = ''; btn.onclick = null;
 
-  const disable = (label, why) => { btn.textContent = label; btn.disabled = true; hint.textContent = why || ''; };
+  // 不能劃的時候按鈕還是可以按，按了就關掉面板回到月曆
+  const disable = (label, why) => { btn.textContent = label; btn.className = 'btn off'; btn.onclick = closeSheet; hint.textContent = why || ''; };
 
   if (day.holiday) return disable('全公司公休', '這天大家統一放假（' + day.holiday + '），不用劃，也不佔自排');
   if (day.mine === '自排' && day.mineBy === 'admin') return disable('已排休', '這天是主管幫你排的，要調整請洽主管');
