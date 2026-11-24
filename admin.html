@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
-<title>小日子劃假系統｜名額管理</title>
+<title>小日子劃假系統｜管理後台</title>
 <style>
   :root{
     --bg:#faf6f1; --card:#fff; --ink:#3b2f2a; --sub:#8a7b72; --line:#ece3da;
@@ -25,6 +25,29 @@
   header{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:12px}
   .who{font-size:12px;color:var(--sub);text-align:right}
   .setbtn{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 14px;font:inherit;font-weight:600;color:var(--ink);cursor:pointer;margin-bottom:4px}
+  .views{display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:12px;width:max-content;max-width:100%}
+  .views button{border:0;background:none;border-radius:9px;padding:8px 18px;font:inherit;font-weight:700;color:var(--sub);cursor:pointer}
+  .views button.on{background:var(--ink);color:#fff}
+  #roster td.c{min-width:38px}
+  #roster td.c button{height:38px}
+  #roster .grp th{background:var(--bg);text-align:left;padding:6px 12px;font-size:12px;color:var(--sub);position:sticky;left:0}
+  #roster .rowhead small{display:block;font-weight:400;color:var(--sub);font-size:11px}
+  #roster .rowhead .noemail{color:var(--ov)}
+  .lv{display:inline-block;min-width:24px;border-radius:6px;padding:2px 4px;font-size:12px;font-weight:700}
+  .lv-休假{background:var(--accent);color:#fff}
+  .lv-可休{background:#e6effa;color:#4a7fb5;border:1px solid #4a7fb5}
+  .lv-特休{background:var(--ov-bg);color:var(--ov);border:1px solid var(--ov)}
+  .lv-other{background:var(--full-bg);color:var(--ink)}
+  #roster td.sum{font-size:12px;color:var(--sub);padding:0 8px;white-space:nowrap}
+  #roster tfoot td{font-size:12px;color:var(--sub);padding:6px 0;background:var(--bg)}
+  .types{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+  .types button{border:1.5px solid var(--line);background:var(--card);border-radius:12px;padding:12px 0;font:inherit;font-weight:700;cursor:pointer;color:var(--ink)}
+  .types button.cur{outline:2px solid var(--ink);outline-offset:1px}
+  .types .t-休假{color:var(--accent);border-color:var(--accent)}
+  .types .t-可休{color:#4a7fb5;border-color:#4a7fb5}
+  .types .t-特休{color:var(--ov);border-color:var(--ov)}
+  .confirmbox{background:var(--ov-bg);border:1px solid var(--ov);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:10px;color:#7a5a17}
+  .confirmbox b{display:block;margin-bottom:4px}
   .badge{display:inline-block;font-size:11px;border-radius:999px;padding:1px 8px;background:var(--bg);border:1px solid var(--line);color:var(--sub)}
   .badge.owner{background:var(--ink);color:#fff;border-color:var(--ink)}
   .alist{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:6px}
@@ -134,9 +157,11 @@
 
   <section id="app" class="hidden">
     <header>
-      <div><div class="brand">小日子劃假系統</div><h1>名額管理</h1></div>
+      <div><div class="brand">小日子劃假系統</div><h1>管理後台</h1></div>
       <div class="who"><button class="setbtn hidden" id="adminsBtn">👥 管理員</button> <button class="setbtn" id="settingsBtn">⚙ 系統設定</button><br><span class="badge" id="roleBadge"></span> <span id="who"></span>・<button class="link" id="logoutBtn">登出</button></div>
     </header>
+
+    <div class="views"><button id="vQuota" class="on">名額設定</button><button id="vRoster">排休總表</button></div>
 
     <div class="bar">
       <div class="month"><button id="prev" aria-label="上個月">‹</button><b id="monthLabel"></b><button id="next" aria-label="下個月">›</button></div>
@@ -144,14 +169,25 @@
       <span class="tag" id="bookingTag"></span>
     </div>
 
-    <div class="legend">
+    <div class="legend" id="quotaLegend">
       <span><i style="background:var(--ov-bg);border-color:var(--ov)"></i>特別設定（日期覆寫）</span>
       <span><i style="background:var(--full-bg)"></i>0 = 禁休</span>
       <span>數字＝可休人數，下面小字＝已排人數</span>
     </div>
 
-    <div class="tablewrap"><table id="grid"></table></div>
-    <div class="hint">點任一格就能改那天、那個職位的名額。沒有特別設定的格子，用的是「名額規則」的預設值。</div>
+    <div id="quotaView">
+      <div class="tablewrap"><table id="grid"></table></div>
+      <div class="hint">點任一格就能改那天、那個職位的名額。沒有特別設定的格子，用的是「名額規則」的預設值。</div>
+    </div>
+    <div id="rosterView" class="hidden">
+      <div class="legend">
+        <span><span class="lv lv-休假">休</span> 休假（員工自己劃）</span>
+        <span><span class="lv lv-可休">可</span> 可休（主管排）</span>
+        <span><span class="lv lv-特休">特</span> 特休</span>
+      </div>
+      <div class="tablewrap"><table id="roster"></table></div>
+      <div class="hint">點任一格就能幫同仁排休、改類型或取消。超過名額或個人上限時會先提醒，確認後才會排。黃色名字＝還沒填 Gmail，不能自己登入劃假。</div>
+    </div>
     <footer id="foot"></footer>
   </section>
 </div>
@@ -240,6 +276,16 @@
   <div class="btns"><button class="btn ghost" id="aClose">關閉</button></div>
 </div>
 
+<div id="leavePanel" class="modal" role="dialog" aria-modal="true">
+  <h2 id="lTitle"></h2>
+  <div class="meta" id="lMeta"></div>
+  <div class="box" id="lNow"></div>
+  <div class="types" id="lTypes"></div>
+  <div class="confirmbox hidden" id="lConfirm"><b>要注意：</b><span id="lIssues"></span></div>
+  <div class="btns" id="lConfirmBtns" style="margin-bottom:8px"></div>
+  <div class="btns"><button class="btn ghost" id="lClose">關閉</button></div>
+</div>
+
 <div id="toast"></div>
 <div id="busy" class="hidden"><div class="spin"></div></div>
 
@@ -248,10 +294,10 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 const WEEK = '日一二三四五六';
 const $ = s => document.querySelector(s);
-const state = { token: null, data: null, store: null, month: null, edit: null, busy: false };
+const state = { token: null, data: null, roster: null, view: 'quota', store: null, rStore: '全部', month: null, edit: null, leave: null, busy: false };
 const store = {
   get(k){ try { return sessionStorage.getItem(k); } catch(e){ return null; } },
   set(k,v){ try { sessionStorage.setItem(k,v); } catch(e){} },
@@ -290,9 +336,124 @@ function handleError(e){
 }
 async function load(month){
   setBusy(true);
-  try { render(await api('adminLoad', { month: month || state.month })); }
+  try {
+    const m = month || state.month;
+    if (state.view === 'roster'){
+      if (!state.data) render(await api('adminLoad', { month: m }));
+      renderRoster(await api('adminRoster', { month: m }));
+    } else render(await api('adminLoad', { month: m }));
+  }
   catch(e){ handleError(e); }
   finally { setBusy(false); }
+}
+function setView(v){
+  state.view = v;
+  $('#vQuota').classList.toggle('on', v === 'quota');
+  $('#vRoster').classList.toggle('on', v === 'roster');
+  $('#quotaView').classList.toggle('hidden', v !== 'quota');
+  $('#quotaLegend').classList.toggle('hidden', v !== 'quota');
+  $('#rosterView').classList.toggle('hidden', v !== 'roster');
+  load(state.month);
+}
+
+/* ===== 排休總表 ===== */
+function lvClass(t){ return ['休假', '可休', '特休'].indexOf(t) >= 0 ? 'lv lv-' + t : 'lv lv-other'; }
+function lvShort(t){ return { '休假': '休', '可休': '可', '特休': '特' }[t] || String(t).slice(0, 1); }
+function renderRoster(r){
+  state.roster = r; state.month = r.month;
+  const [y, m] = r.month.split('-');
+  $('#monthLabel').textContent = y + ' 年 ' + Number(m) + ' 月';
+  const chips = $('#stores'); chips.textContent = '';
+  ['全部'].concat(r.stores).forEach(st => {
+    const c = el('button', 'chip' + (st === state.rStore ? ' on' : ''), st);
+    c.onclick = () => { state.rStore = st; renderRoster(state.roster); };
+    chips.appendChild(c);
+  });
+  const people = r.people.filter(p => state.rStore === '全部' || p.store === state.rStore);
+  const t = $('#roster'); t.textContent = '';
+  const thead = el('thead'), hr = el('tr');
+  hr.appendChild(el('th', 'rowhead', '同仁'));
+  r.days.forEach(day => {
+    const th = el('th', day.dow === 6 ? 'sat' : day.dow === 0 ? 'sun' : '', String(Number(day.date.slice(8))));
+    th.appendChild(el('small', '', WEEK[day.dow])); hr.appendChild(th);
+  });
+  hr.appendChild(el('th', '', '休假')); hr.appendChild(el('th', '', '可休')); hr.appendChild(el('th', '', '合計'));
+  thead.appendChild(hr); t.appendChild(thead);
+  const tb = el('tbody'); let lastRole = null;
+  const perDay = r.days.map(() => 0);
+  people.forEach(p => {
+    if (p.role !== lastRole){
+      lastRole = p.role;
+      const g = el('tr', 'grp'); const th = el('th', '', p.role); th.colSpan = r.days.length + 4; g.appendChild(th); tb.appendChild(g);
+    }
+    const tr = el('tr');
+    const head = el('th', 'rowhead');
+    head.appendChild(el('span', p.hasEmail ? '' : 'noemail', p.name + (p.inactive ? '（停用）' : '')));
+    head.appendChild(el('small', '', p.store));
+    tr.appendChild(head);
+    const mine = r.leaves[p.key] || {};
+    let cLeave = 0, cMgr = 0, cAll = 0;
+    r.days.forEach((day, i) => {
+      const type = mine[day.date];
+      const td = el('td', 'c' + (day.dow === 0 || day.dow === 6 ? ' we' : ''));
+      const b = el('button');
+      if (type){ b.appendChild(el('span', lvClass(type), lvShort(type))); perDay[i]++; cAll++; if (type === '休假') cLeave++; if (type === '可休') cMgr++; }
+      b.title = p.name + ' ' + day.date + (type ? ' ' + type : '');
+      if (!p.inactive) b.onclick = () => openLeave(p, day);
+      td.appendChild(b); tr.appendChild(td);
+    });
+    const s1 = el('td', 'sum', cLeave + ' / ' + r.maxLeave); if (cLeave > r.maxLeave) s1.style.color = 'var(--accent)';
+    tr.appendChild(s1); tr.appendChild(el('td', 'sum', String(cMgr))); tr.appendChild(el('td', 'sum', String(cAll)));
+    tb.appendChild(tr);
+  });
+  if (!people.length){ const tr = el('tr'); const td = el('td', '', '這間門市沒有人員'); td.colSpan = r.days.length + 4; td.style.padding = '16px'; tr.appendChild(td); tb.appendChild(tr); }
+  t.appendChild(tb);
+  const tf = el('tfoot'), fr = el('tr');
+  fr.appendChild(el('th', 'rowhead', '當天休假人數'));
+  perDay.forEach(n => fr.appendChild(el('td', '', n ? String(n) : '')));
+  fr.appendChild(el('td')); fr.appendChild(el('td')); fr.appendChild(el('td'));
+  tf.appendChild(fr); t.appendChild(tf);
+  $('#foot').textContent = '管理後台 v' + VERSION + '・後端 v' + r.version + '・更新於 ' + r.serverTime.slice(11, 19);
+  if (state.leave) fillLeave();
+}
+function openLeave(p, day){
+  state.leave = { key: p.key, date: day.date };
+  fillLeave();
+  $('#backdrop').classList.add('show'); $('#leavePanel').classList.add('show');
+}
+function fillLeave(){
+  const r = state.roster, lv = state.leave;
+  const p = r.people.find(x => x.key === lv.key); if (!p){ closePanel(); return; }
+  const day = r.days.find(d => d.date === lv.date) || { date: lv.date, dow: new Date(lv.date + 'T00:00:00').getDay() };
+  const cur = (r.leaves[p.key] || {})[lv.date] || null;
+  $('#lTitle').textContent = p.name + '・' + Number(lv.date.slice(5, 7)) + '/' + Number(lv.date.slice(8)) + '（' + WEEK[day.dow] + '）';
+  $('#lMeta').textContent = p.store + '・' + p.role + (p.hasEmail ? '' : '・還沒填 Gmail');
+  $('#lNow').textContent = cur ? '目前：' + cur : '目前：上班（沒有排休）';
+  const box = $('#lTypes'); box.textContent = '';
+  ['休假', '可休', '特休'].forEach(t => {
+    const b = el('button', 't-' + t + (cur === t ? ' cur' : ''), t);
+    b.onclick = () => { if (cur !== t) setLeave(t, false); };
+    box.appendChild(b);
+  });
+  const cb = $('#lConfirmBtns'); cb.textContent = '';
+  if (cur){ const c = el('button', 'btn reset', '取消排休（改回上班）'); c.onclick = () => setLeave(null, false); cb.appendChild(c); }
+  $('#lConfirm').classList.add('hidden');
+}
+async function setLeave(type, force){
+  if (state.busy) return;
+  setBusy(true);
+  try {
+    const d = await api('adminSetLeave', { key: state.leave.key, date: state.leave.date, type, force });
+    renderRoster(d); closePanel(); toast(d.message || '已更新');
+  } catch(e){
+    if (e.code === 'NEED_CONFIRM'){
+      $('#lIssues').textContent = e.message;
+      $('#lConfirm').classList.remove('hidden');
+      const cb = $('#lConfirmBtns'); cb.textContent = '';
+      const go = el('button', 'btn primary', '仍要排' + type); go.onclick = () => setLeave(type, true);
+      cb.appendChild(go);
+    } else handleError(e);
+  } finally { setBusy(false); }
 }
 
 /* ===== 畫面 ===== */
@@ -311,6 +472,7 @@ function render(d){
   $('#bookingTag').innerHTML = '';
   $('#bookingTag').append('目前開放劃假：', el('b', '', d.bookingMonth));
 
+  if (state.view === 'roster') return;
   const chips = $('#stores'); chips.textContent = '';
   d.stores.forEach(s => {
     const c = el('button', 'chip' + (s === state.store ? ' on' : ''), s);
@@ -393,7 +555,7 @@ function openPanel(role, i){
 
   $('#backdrop').classList.add('show'); $('#panel').classList.add('show');
 }
-function closePanel(){ state.edit = null; $('#backdrop').classList.remove('show'); ['#panel', '#setPanel', '#adminPanel'].forEach(id => $(id).classList.remove('show')); }
+function closePanel(){ state.edit = null; state.leave = null; $('#backdrop').classList.remove('show'); ['#panel', '#setPanel', '#adminPanel', '#leavePanel'].forEach(id => $(id).classList.remove('show')); }
 
 /* ===== 管理員（只有系統擁有者） ===== */
 function openAdmins(){
@@ -523,6 +685,9 @@ $('#cancelBtn').onclick = closePanel;
 $('#backdrop').onclick = closePanel;
 $('#logoutBtn').onclick = () => logout('');
 $('#settingsBtn').onclick = openSettings;
+$('#vQuota').onclick = () => { if (state.view !== 'quota') setView('quota'); };
+$('#vRoster').onclick = () => { if (state.view !== 'roster') setView('roster'); };
+$('#lClose').onclick = closePanel;
 $('#adminsBtn').onclick = openAdmins;
 $('#aAdd').onclick = addAdmin;
 $('#aEmail').onkeydown = e => { if (e.key === 'Enter') addAdmin(); };
