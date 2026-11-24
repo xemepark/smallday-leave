@@ -32,6 +32,9 @@
   .who b{display:block;color:var(--ink);font-size:15px}
   .link{background:none;border:0;color:var(--sub);text-decoration:underline;font-size:12px;padding:0;cursor:pointer}
 
+  .tabs{display:flex;gap:6px;margin-bottom:10px}
+  .tab{flex:1;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:8px;font:inherit;font-weight:600;color:var(--ink);cursor:pointer}
+  .tab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
   .status{border-radius:12px;padding:10px 12px;font-size:14px;margin-bottom:10px}
   .status.open{background:var(--ok-bg);color:var(--ok)}
   .status.before,.status.unset{background:var(--other-bg);color:var(--other)}
@@ -122,10 +125,12 @@
       <div class="who"><b id="whoName"></b><span id="whoRole"></span><br><button class="link" id="logoutBtn">登出</button></div>
     </header>
 
+    <div class="tabs hidden" id="monthTabs"></div>
+
     <div id="status" class="status"></div>
 
     <div class="counts">
-      <div class="count"><small>指定假（休假）</small><b id="cLeave">0</b><span id="cLeaveMax"></span></div>
+      <div class="count"><small id="cLeaveLabel">指定假（休假）</small><b id="cLeave">0</b><span id="cLeaveMax"></span></div>
       <div class="count" id="cWeekendBox"><small>週六日自選</small><b id="cWeekend">0</b><span id="cWeekendMax"></span></div>
     </div>
 
@@ -163,12 +168,12 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '1.0.1';
+const VERSION = '1.2.0';
 const POLL_MS = 15000;
 const WEEK = '日一二三四五六';
 
 const $ = s => document.querySelector(s);
-const state = { token: null, data: null, sel: null, busy: false, confirmCancel: false, timer: null };
+const state = { token: null, data: null, month: null, sel: null, busy: false, confirmCancel: false, timer: null };
 
 const store = {
   get(k){ try { return sessionStorage.getItem(k); } catch(e){ return null; } },
@@ -242,7 +247,7 @@ function handleError(e){
 async function load(first){
   if (first) setBusy(true);
   try {
-    render(await api('load'));
+    render(await api('load', { month: state.month }));
     if (first) startPoll();
   } catch(e){ handleError(e); }
   finally { if (first) setBusy(false); }
@@ -271,7 +276,9 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && st
 
 /* ===== 畫面 ===== */
 function render(d){
+  if (state.sel && state.data && d.month !== state.data.month) closeSheet();
   state.data = d;
+  state.month = d.month;
   $('#login').classList.add('hidden');
   $('#app').classList.remove('hidden');
 
@@ -279,6 +286,15 @@ function render(d){
   $('#monthTitle').textContent = y + ' 年 ' + Number(m) + ' 月';
   $('#whoName').textContent = d.me.name;
   $('#whoRole').textContent = d.me.store + '・' + d.me.role;
+
+  const tabs = $('#monthTabs');
+  tabs.classList.toggle('hidden', !(d.months && d.months.length > 1));
+  tabs.textContent = '';
+  (d.months || []).forEach(mo => {
+    const b = el('button', 'tab' + (mo === d.month ? ' on' : ''), Number(mo.slice(5)) + ' 月');
+    b.onclick = () => { if (mo !== state.month && !state.busy){ state.month = mo; closeSheet(); load(true); } };
+    tabs.appendChild(b);
+  });
 
   const st = $('#status');
   st.className = 'status ' + d.window.status;
@@ -289,6 +305,7 @@ function render(d){
     unset:  '主管還沒設定劃假時間'
   }[d.window.status];
 
+  $('#cLeaveLabel').textContent = Number(m) + ' 月指定假（休假）';
   $('#cLeave').textContent = d.counts.leave;
   $('#cLeaveMax').textContent = ' / ' + d.limits.maxLeave + ' 天';
   $('#cWeekendBox').classList.toggle('hidden', !d.limits.weekendCapped);
