@@ -32,6 +32,9 @@
   .who b{display:block;color:var(--ink);font-size:15px}
   .link{background:none;border:0;color:var(--sub);text-decoration:underline;font-size:12px;padding:0;cursor:pointer}
 
+  .menu{display:flex;gap:6px;overflow-x:auto;margin:0 0 12px;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+  .menu a{flex:none;text-decoration:none;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:7px 14px;font-size:14px;font-weight:600;white-space:nowrap}
+  .menu a.on{background:var(--ink);color:#fff;border-color:var(--ink)}
   .tabs{display:flex;gap:6px;margin-bottom:10px}
   .tab{flex:1;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:8px;font:inherit;font-weight:600;color:var(--ink);cursor:pointer}
   .tab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
@@ -125,6 +128,8 @@
       <div class="who"><b id="whoName"></b><span id="whoRole"></span><br><button class="link" id="logoutBtn">登出</button></div>
     </header>
 
+    <nav class="menu hidden" id="menu"></nav>
+
     <div class="tabs hidden" id="monthTabs"></div>
 
     <div id="status" class="status"></div>
@@ -168,12 +173,12 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '1.2.0';
+const VERSION = '1.5.0';
 const POLL_MS = 15000;
 const WEEK = '日一二三四五六';
 
 const $ = s => document.querySelector(s);
-const state = { token: null, data: null, month: null, sel: null, busy: false, confirmCancel: false, timer: null };
+const state = { token: null, me: null, data: null, month: null, sel: null, busy: false, confirmCancel: false, timer: null };
 
 const store = {
   get(k){ try { return sessionStorage.getItem(k); } catch(e){ return null; } },
@@ -206,8 +211,38 @@ function tokenExpired(t){
 function setToken(t){
   state.token = t;
   store.set('token', t);
-  load(true);
+  start();
 }
+
+/** 先確認身分：同仁進劃假頁；只有管理權限的人直接進管理後台 */
+async function start(){
+  setBusy(true);
+  try {
+    state.me = await api('whoami');
+    if (!state.me.staff){ location.replace('admin.html#quota'); return; }
+    setBusy(false);
+    await load(true);
+    renderMenu('leave');
+  } catch(e){ handleError(e); }
+  finally { setBusy(false); }
+}
+
+/* ===== 依角色顯示的選單（員工頁、管理後台共用同一份） ===== */
+const NAV = [
+  { id: 'leave',    label: '我的劃假', href: 'index.html',         show: me => me.staff },
+  { id: 'quota',    label: '名額設定', href: 'admin.html#quota',    show: me => me.admin },
+  { id: 'roster',   label: '排休總表', href: 'admin.html#roster',   show: me => me.admin },
+  { id: 'settings', label: '系統設定', href: 'admin.html#settings', show: me => me.admin },
+  { id: 'admins',   label: '管理員',   href: 'admin.html#admins',   show: me => me.owner }
+];
+function renderMenu(active){
+  const m = $('#menu'); if (!m || !state.me) return;
+  const items = NAV.filter(n => n.show(state.me));
+  m.textContent = '';
+  m.classList.toggle('hidden', items.length < 2);
+  items.forEach(n => { const a = el('a', n.id === active ? 'on' : '', n.label); a.href = n.href; m.appendChild(a); });
+}
+
 
 function showLogin(msg){
   stopPoll();
@@ -218,7 +253,7 @@ function showLogin(msg){
 }
 
 function logout(msg){
-  state.token = null; state.data = null;
+  state.token = null; state.data = null; state.me = null;
   store.del('token');
   if (window.google && google.accounts) google.accounts.id.disableAutoSelect();
   showLogin(msg);
