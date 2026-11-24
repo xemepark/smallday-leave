@@ -147,6 +147,7 @@
   .pcal button.blk{box-shadow:inset 0 0 0 2px var(--accent)}
   .pcal button.hol{background:#eaf3ec;cursor:default}
   .pcal button .lv{font-size:11px;min-width:20px;padding:0 3px}
+  .pcal button.pend{box-shadow:0 0 0 3px var(--ov);background:var(--ov-bg)}
   .pcal button small{font-size:9px;font-weight:600;color:var(--accent)}
   .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px}
   .stats div{background:var(--bg);border-radius:10px;padding:8px 4px;text-align:center}
@@ -415,7 +416,7 @@
   <div id="ppPick" class="hidden">
     <p class="pphint" id="ppHint"></p>
     <div class="pcal" id="ppCal"></div>
-    <div class="confirmbox hidden" id="ppConfirm"><b>要注意：</b><span id="ppIssues"></span><div class="btns" id="ppConfirmBtns" style="margin-top:8px"></div></div>
+    <div class="confirmbox hidden" id="ppConfirm"><b id="ppConfirmTitle">要注意：</b><span id="ppIssues"></span><div class="btns" id="ppConfirmBtns" style="margin-top:8px"></div></div>
   </div>
   <div class="btns"><button class="btn primary" id="ppPickBtn">📅 幫他排假</button><button class="btn ghost" id="ppClose">關閉</button></div>
 </div>
@@ -438,7 +439,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '2.6.0';
+const VERSION = '2.6.1';
 const WEEK = '日一二三四五六';
 const $ = s => document.querySelector(s);
 const state = { token: null, me: null, data: null, roster: null, view: 'quota', store: null, rStore: '全部', month: null, edit: null, leave: null, busy: false };
@@ -921,6 +922,7 @@ function openPerson(key, pick){
     r.days.forEach(d => {
       const t = mine[d.date];
       const b = el('button', (d.dow === 6 ? 'sat' : d.dow === 0 ? 'sun' : '') + (d.holiday ? ' hol' : d.block ? ' blk' : ''), String(Number(d.date.slice(8))));
+      b.dataset.date = d.date;
       if (d.holiday) b.appendChild(el('span', 'lv lv-公休', '休'));
       else if (t) b.appendChild(el('span', lvClass(t), lvShort(t)));
       else if (d.block) b.appendChild(el('small', '', '禁休'));
@@ -945,10 +947,16 @@ async function pickSet(key, date, type, force){
     toast(type ? Number(date.slice(5, 7)) + '/' + Number(date.slice(8)) + ' 排了公排' : '已取消');
   } catch(e){
     if (e.code === 'NEED_CONFIRM'){
+      // 標出是哪一天，對話框也寫清楚日期
+      const md = mdw(date, new Date(date + 'T00:00:00').getDay());
+      const what = type ? '排' + type : '取消排休';
+      document.querySelectorAll('#ppCal button.pend').forEach(x => x.classList.remove('pend'));
+      const cell = document.querySelector('#ppCal button[data-date="' + date + '"]'); if (cell) cell.classList.add('pend');
+      $('#ppConfirmTitle').textContent = '要幫他在 ' + md + ' ' + what + '？要注意：';
       $('#ppIssues').textContent = e.message;
       const cb = $('#ppConfirmBtns'); cb.textContent = '';
-      const go = el('button', 'btn primary', '仍要排'); go.onclick = () => pickSet(key, date, type, true);
-      const no = el('button', 'btn ghost', '不要'); no.onclick = () => $('#ppConfirm').classList.add('hidden');
+      const go = el('button', 'btn primary', '仍要' + (type ? '排 ' : '取消 ') + Number(date.slice(5, 7)) + '/' + Number(date.slice(8))); go.onclick = () => pickSet(key, date, type, true);
+      const no = el('button', 'btn ghost', '不要'); no.onclick = () => { $('#ppConfirm').classList.add('hidden'); if (cell) cell.classList.remove('pend'); };
       cb.appendChild(go); cb.appendChild(no);
       $('#ppConfirm').classList.remove('hidden');
       $('#ppConfirm').scrollIntoView({ block: 'nearest' });
