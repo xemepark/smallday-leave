@@ -175,7 +175,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '1.7.0';
+const VERSION = '1.8.0';
 const POLL_MS = 15000;
 const WEEK = '日一二三四五六';
 
@@ -377,7 +377,7 @@ function render(d){
 
 function dayState(day){
   if (day.holiday) return { cls: 'holiday', text: '公休' };
-  if (day.mine === '休假') return { cls: 'mine-leave', text: '休假' };
+  if (day.mine === '休假') return { cls: 'mine-leave', text: day.mineBy === 'admin' ? '休(主管)' : '休假' };
   if (day.mine === '可休') return { cls: 'mine-mgr', text: '可休' };
   if (day.mine) return { cls: 'mine-other', text: day.mine };
   if (day.unlimited) return { cls: 'open', text: '可休' };
@@ -435,6 +435,7 @@ function fillSheet(date){
   const disable = (label, why) => { btn.textContent = label; btn.disabled = true; hint.textContent = why || ''; };
 
   if (day.holiday) return disable('全公司公休', '這天大家統一放假（' + day.holiday + '），不用劃，也不佔指定假');
+  if (day.mine === '休假' && day.mineBy === 'admin') return disable('已排休假', '這天是主管幫你排的休假，要調整請洽主管');
   if (day.mine === '休假'){
     if (d.window.status !== 'open') return disable('取消這天', '不在劃假時間，要調整請找人換班並經主管同意');
     btn.className = 'btn danger' + (state.confirmCancel ? ' confirm' : '');
