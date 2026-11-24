@@ -33,7 +33,8 @@
   .views button.on{background:var(--ink);color:#fff}
   #roster td.c{min-width:38px}
   #roster td.c button{height:38px}
-  #roster .grp th{background:var(--bg);text-align:left;padding:6px 12px;font-size:12px;color:var(--sub);position:sticky;left:0}
+  #roster .grp th{background:var(--bg);text-align:left;padding:6px 12px;font-size:12px;color:var(--sub)}
+  #roster .grp th span{position:sticky;left:12px}
   #roster .rowhead small{display:block;font-weight:400;color:var(--sub);font-size:11px}
   #roster .rowhead .noemail{color:var(--ov)}
   .lv{display:inline-block;min-width:24px;border-radius:6px;padding:2px 4px;font-size:12px;font-weight:700}
@@ -86,14 +87,15 @@
   .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--sub);margin:4px 0 8px}
   .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-2px;border:1px solid var(--line)}
 
-  .tablewrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:14px}
+  /* 表格自己捲動（限高），往下滑時日期標題列會固定在表格頂端 */
+  .tablewrap{overflow:auto;max-height:calc(100vh - 80px);max-height:calc(100dvh - 80px);-webkit-overflow-scrolling:touch;background:var(--card);border:1px solid var(--line);border-radius:14px}
   table{border-collapse:separate;border-spacing:0;min-width:100%}
   th,td{padding:0;text-align:center;border-bottom:1px solid var(--line);border-right:1px solid var(--line)}
-  thead th{position:sticky;top:0;background:var(--card);font-weight:600;font-size:12px;padding:6px 0;min-width:46px}
+  thead th{position:sticky;top:0;background:var(--card);font-weight:600;font-size:12px;padding:6px 0;min-width:46px;z-index:2}
   thead th small{display:block;font-weight:400;color:var(--sub)}
   thead th.sat,thead th.sat small{color:var(--sat)} thead th.sun,thead th.sun small{color:var(--sun)}
   .rowhead{position:sticky;left:0;background:var(--card);z-index:1;text-align:left;padding:0 12px;white-space:nowrap;font-weight:600;min-width:72px}
-  thead .rowhead{z-index:2}
+  thead .rowhead{z-index:3}
   td button{width:100%;height:52px;border:0;background:none;cursor:pointer;font:inherit;color:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
   td button:hover{background:var(--bg)}
   td .q{font-size:17px;font-weight:700;line-height:1.1}
@@ -417,7 +419,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '2.4.0';
+const VERSION = '2.5.0';
 const WEEK = '日一二三四五六';
 const $ = s => document.querySelector(s);
 const state = { token: null, me: null, data: null, roster: null, view: 'quota', store: null, rStore: '全部', month: null, edit: null, leave: null, busy: false };
@@ -547,7 +549,7 @@ function renderRoster(r){
   people.forEach(p => {
     if (p.role !== lastRole){
       lastRole = p.role;
-      const g = el('tr', 'grp'); const th = el('th', '', p.role); th.colSpan = r.days.length + 5; g.appendChild(th); tb.appendChild(g);
+      const g = el('tr', 'grp'); const th = el('th'); th.appendChild(el('span', '', p.role)); th.colSpan = r.days.length + 5; g.appendChild(th); tb.appendChild(g);
     }
     const tr = el('tr');
     const head = el('th', 'rowhead');
