@@ -135,6 +135,25 @@
   .stats small{color:var(--sub);font-size:11px}
   .stats .over b{color:var(--accent)}
   .dayppl{margin-bottom:12px}
+  td.free .q{font-size:13px;color:var(--ok);font-weight:600}
+  .rcard{border:1px solid var(--line);border-radius:12px;margin-bottom:8px;overflow:hidden}
+  .rcard.off{background:var(--bg)}
+  .rhead{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer}
+  .rhead b{font-size:15px}
+  .rhead small{margin-left:auto;color:var(--sub);font-size:12px}
+  .rhead input{width:20px;height:20px}
+  .rbody{padding:0 12px 10px}
+  .rrow{display:grid;grid-template-columns:42px 1fr auto;gap:8px;align-items:center;padding:6px 0;border-top:1px dashed var(--line)}
+  .rrow > b{font-size:13px}
+  .rrow select{border:1px solid var(--line);border-radius:8px;padding:6px;font:inherit;font-size:13px;background:var(--card);color:var(--ink);min-width:0}
+  .mini{display:flex;align-items:center;gap:4px}
+  .mini button{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--card);font-size:16px;cursor:pointer;color:var(--ink)}
+  .mini span{min-width:26px;text-align:center;font-weight:700;font-size:16px}
+  .exl{grid-column:2 / 4;display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--sub)}
+  .exl .ex{display:flex;align-items:center;gap:4px;background:var(--bg);border-radius:8px;padding:2px 4px 2px 8px;color:var(--ink)}
+  .exl .ex select{padding:3px;font-size:12px}
+  .exl .ex .x{border:0;background:none;color:var(--accent);cursor:pointer;font-size:14px}
+  .exl .add{border:0;background:none;color:var(--sub);text-decoration:underline;cursor:pointer;font-size:12px;padding:0}
   footer{text-align:center;color:var(--sub);font-size:11px;margin-top:16px}
 
   /* 編輯面板 */
@@ -208,6 +227,7 @@
       <span><i style="background:var(--ov-bg);border-color:var(--ov)"></i>特別設定（日期覆寫）</span>
       <span><i style="background:var(--full-bg)"></i>0 = 禁休</span>
       <span><i style="background:#eaf3ec;border-color:#4f8a5b"></i>公 = 全公司公休</span>
+      <span>不限 = 不受名額控制的職務</span>
       <span>數字＝可休人數，下面小字＝已排人數</span>
     </div>
 
@@ -366,6 +386,16 @@
   <div class="btns"><button class="btn ghost" id="ppClose">關閉</button></div>
 </div>
 
+<div id="rulesPanel" class="modal" role="dialog" aria-modal="true">
+  <h2>職務與每日名額</h2>
+  <div class="meta">勾選的職務每天休假有人數限制；沒勾的職務每天不限人數（每人每月指定假、週末、連休上限照算）。特定日期要例外，到「名額設定」點那一格改。</div>
+  <div id="rList"></div>
+  <div class="btns" style="margin-top:12px">
+    <button class="btn ghost" id="rCancel">取消</button>
+    <button class="btn primary" id="rSave">儲存</button>
+  </div>
+</div>
+
 <div id="toast"></div>
 <div id="busy" class="hidden"><div class="spin"></div></div>
 
@@ -374,7 +404,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '1.7.0';
+const VERSION = '1.8.0';
 const WEEK = '日一二三四五六';
 const $ = s => document.querySelector(s);
 const state = { token: null, me: null, data: null, roster: null, view: 'quota', store: null, rStore: '全部', month: null, edit: null, leave: null, busy: false };
@@ -417,6 +447,7 @@ async function applyHash(){
   await setView(v);
   if (h === 'settings' && state.data) openSettings();
   if (h === 'admins' && state.data) openAdmins();
+  if (h === 'rules' && state.data) openRules();
   renderMenu(h);
 }
 window.addEventListener('hashchange', () => { if (state.me) applyHash(); });
@@ -426,6 +457,7 @@ const NAV = [
   { id: 'leave',    label: '我的劃假', href: 'index.html',         show: me => me.staff },
   { id: 'quota',    label: '名額設定', href: 'admin.html#quota',    show: me => me.admin },
   { id: 'roster',   label: '排休總表', href: 'admin.html#roster',   show: me => me.admin },
+  { id: 'rules',    label: '職務名額', href: 'admin.html#rules',    show: me => me.admin },
   { id: 'settings', label: '系統設定', href: 'admin.html#settings', show: me => me.admin },
   { id: 'admins',   label: '管理員',   href: 'admin.html#admins',   show: me => me.owner }
 ];
@@ -621,8 +653,13 @@ function render(d){
         b.appendChild(el('span', 'q', '公')); b.appendChild(el('span', 'u', ''));
         b.onclick = () => openDay(day); td.appendChild(b); tr.appendChild(td); return;
       }
+      if (c.unlimited){
+        const td = el('td', cls.concat('free').join(' ')); const b = el('button');
+        b.title = day.date + ' ' + role + ' 不受名額控制（不限人數）';
+        b.appendChild(el('span', 'q', '不限')); b.appendChild(el('span', 'u', c.used ? '已 ' + c.used : ''));
+        b.onclick = () => openPanel(role, i); td.appendChild(b); tr.appendChild(td); return;
+      }
       if (c.override) cls.push('ov');
-      if (c.quota === null) cls.push('na');
       else if (c.quota <= 0) cls.push('zero');
       else if (c.used >= c.quota) cls.push('full');
       const td = el('td', cls.join(' '));
@@ -681,10 +718,12 @@ function openPanel(role, i){
 function closePanel(silent){
   state.edit = null; state.leave = null;
   $('#backdrop').classList.remove('show');
-  ['#panel', '#setPanel', '#adminPanel', '#leavePanel', '#dayPanel', '#listPanel', '#personPanel'].forEach(id => $(id).classList.remove('show'));
+  const ids = ['#panel', '#setPanel', '#adminPanel', '#leavePanel', '#dayPanel', '#listPanel', '#personPanel', '#rulesPanel'];
+  const wasOpen = ids.some(id => $(id).classList.contains('show'));
+  ids.forEach(id => $(id).classList.remove('show'));
   // 關掉「系統設定」「管理員」面板時，網址和選單回到目前的畫面
   const h = location.hash.slice(1);
-  if (silent !== true && (h === 'settings' || h === 'admins')){
+  if (silent !== true && wasOpen && (h === 'settings' || h === 'admins' || h === 'rules')){
     const v = state.view === 'roster' ? 'roster' : 'quota';
     history.replaceState(null, '', '#' + v);
     renderMenu(v);
@@ -818,6 +857,95 @@ function openPerson(key){
   r.days.forEach(d => { if (offSet[d.date]){ work = 0; } else { work++; maxWork = Math.max(maxWork, work); } });
   if (maxWork > 6){ const li = el('li'); li.appendChild(el('span', 'none', '⚠️ 這個月最長連續上班 ' + maxWork + ' 天（超過 6 天）')); ul.appendChild(li); }
   $('#backdrop').classList.add('show'); $('#personPanel').classList.add('show');
+}
+
+/* ===== 職務與每日名額 ===== */
+const DAYS3 = [['平日', '平日'], ['六', '週六'], ['日', '週日']];
+function buildRulesModel(){
+  const d = state.data, rc = d.rulesConfig, model = {};
+  d.roles.forEach(role => {
+    model[role] = {};
+    DAYS3.forEach(([dt]) => {
+      const rs = rc.rules.filter(r => r.role === role && r.dayType === dt);
+      const primary = rs.find(r => r.scope === '合計') || rs.find(r => !r.stores.length) || rs[0];
+      const m = { scope: primary && primary.scope === '合計' ? '合計' : '各門市', quota: primary ? primary.quota : 1, ex: [] };
+      rs.filter(r => r !== primary).forEach(r => r.stores.forEach(st => m.ex.push({ store: st, quota: r.quota })));
+      model[role][dt] = m;
+    });
+  });
+  state.rm = { controlled: new Set(rc.controlled), model };
+}
+function openRules(){
+  buildRulesModel(); renderRules();
+  $('#backdrop').classList.add('show'); $('#rulesPanel').classList.add('show');
+}
+function miniStepper(get, set){
+  const w = el('div', 'mini');
+  const minus = el('button', '', '−'), val = el('span', '', String(get())), plus = el('button', '', '＋');
+  minus.onclick = () => { set(Math.max(0, get() - 1)); val.textContent = get(); };
+  plus.onclick = () => { set(Math.min(99, get() + 1)); val.textContent = get(); };
+  w.append(minus, val, plus); return w;
+}
+function renderRules(){
+  const box = $('#rList'); box.textContent = '';
+  const stores = state.data.stores;
+  state.data.roles.forEach(role => {
+    const on = state.rm.controlled.has(role);
+    const card = el('div', 'rcard' + (on ? '' : ' off'));
+    const head = el('label', 'rhead');
+    const cb = el('input'); cb.type = 'checkbox'; cb.checked = on;
+    cb.onchange = () => { if (cb.checked) state.rm.controlled.add(role); else state.rm.controlled.delete(role); renderRules(); };
+    head.append(cb, el('b', '', role), el('small', '', on ? '受名額控制' : '不限人數'));
+    card.appendChild(head);
+    if (on){
+      const body = el('div', 'rbody');
+      DAYS3.forEach(([dt, label]) => {
+        const m = state.rm.model[role][dt];
+        const row = el('div', 'rrow');
+        row.appendChild(el('b', '', label));
+        const sel = el('select');
+        [['各門市', '每間門市各自算'], ['合計', '全公司合計']].forEach(([v, t]) => { const o = el('option', '', t); o.value = v; sel.appendChild(o); });
+        sel.value = m.scope; sel.onchange = () => { m.scope = sel.value; };
+        row.appendChild(sel);
+        row.appendChild(miniStepper(() => m.quota, v => { m.quota = v; }));
+        const exl = el('div', 'exl');
+        m.ex.forEach((x, i) => {
+          const chip = el('span', 'ex');
+          const ss = el('select'); stores.forEach(st => { const o = el('option', '', st); o.value = st; ss.appendChild(o); });
+          ss.value = x.store; ss.onchange = () => { x.store = ss.value; };
+          chip.append(ss, '另計');
+          chip.appendChild(miniStepper(() => x.quota, v => { x.quota = v; }));
+          const rm = el('button', 'x', '✕'); rm.title = '移除'; rm.onclick = () => { m.ex.splice(i, 1); renderRules(); };
+          chip.appendChild(rm); exl.appendChild(chip);
+        });
+        const add = el('button', 'add', '＋ 某間門市另外算');
+        add.onclick = () => { const used = m.ex.map(x => x.store); m.ex.push({ store: stores.find(st => used.indexOf(st) < 0) || stores[0], quota: 1 }); renderRules(); };
+        exl.appendChild(add);
+        row.appendChild(exl);
+        body.appendChild(row);
+      });
+      card.appendChild(body);
+    }
+    box.appendChild(card);
+  });
+}
+async function saveRules(){
+  if (state.busy) return;
+  const stores = state.data.stores, rules = [];
+  for (const role of state.data.roles){
+    for (const [dt, label] of DAYS3){
+      const m = state.rm.model[role][dt];
+      const exStores = m.ex.map(x => x.store);
+      if (new Set(exStores).size !== exStores.length){ toast(role + ' ' + label + '：同一間門市重複了', true); return; }
+      rules.push({ role, dayType: dt, scope: m.scope, stores: exStores.length ? stores.filter(st => exStores.indexOf(st) < 0) : [], quota: m.quota, note: '' });
+      m.ex.forEach(x => rules.push({ role, dayType: dt, scope: '各門市', stores: [x.store], quota: x.quota, note: '' }));
+    }
+  }
+  const controlled = state.data.roles.filter(r => state.rm.controlled.has(r));
+  setBusy(true);
+  try { const d = await api('adminSaveRules', { controlled, rules }); render(d); closePanel(); toast(d.message || '已儲存'); }
+  catch(e){ handleError(e); }
+  finally { setBusy(false); }
 }
 
 /* ===== 管理員（只有系統擁有者） ===== */
@@ -956,6 +1084,8 @@ $('#sCount').onchange = updatePreview;
 $('#sSave').onclick = saveSettings;
 $('#sCancel').onclick = closePanel;
 $('#dCancel').onclick = closePanel;
+$('#rCancel').onclick = closePanel;
+$('#rSave').onclick = saveRules;
 $('#byDateBtn').onclick = openList;
 $('#liOnly').onchange = fillList;
 $('#liClose').onclick = closePanel;
