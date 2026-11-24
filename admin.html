@@ -24,6 +24,14 @@
 
   header{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:12px}
   .who{font-size:12px;color:var(--sub);text-align:right}
+  .setbtn{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 14px;font:inherit;font-weight:600;color:var(--ink);cursor:pointer;margin-bottom:4px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .grid2>div{min-width:0}
+  input[type=datetime-local].text{min-width:0;font-size:13px;padding:9px 6px}
+  .preview{background:var(--ok);color:#fff;border-radius:10px;padding:8px 12px;font-size:13px;margin-bottom:12px}
+  .preview.warnbg{background:var(--ov)}
+  .subnote{font-size:12px;color:var(--sub);margin-top:4px}
+  select.text{appearance:auto}
   .link{background:none;border:0;color:var(--sub);text-decoration:underline;cursor:pointer;font-size:12px;padding:0}
 
   .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px}
@@ -65,15 +73,15 @@
   /* 編輯面板 */
   #backdrop{position:fixed;inset:0;background:rgba(40,30,25,.35);opacity:0;pointer-events:none;transition:opacity .2s;z-index:10}
   #backdrop.show{opacity:1;pointer-events:auto}
-  #panel{position:fixed;left:50%;bottom:0;transform:translate(-50%,105%);width:min(460px,100%);background:var(--card);
+  .modal{position:fixed;left:50%;bottom:0;transform:translate(-50%,105%);width:min(500px,100%);background:var(--card);
     border-radius:18px 18px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));transition:transform .22s;z-index:11;
     box-shadow:0 -6px 24px rgba(0,0,0,.1);max-height:92vh;overflow:auto}
-  #panel.show{transform:translate(-50%,0)}
+  .modal.show{transform:translate(-50%,0)}
   @media(min-width:700px){
-    #panel{top:50%;bottom:auto;border-radius:18px;transform:translate(-50%,-46%);opacity:0;visibility:hidden;transition:transform .2s,opacity .2s,visibility .2s}
-    #panel.show{transform:translate(-50%,-50%);opacity:1;visibility:visible}
+    .modal{top:50%;bottom:auto;border-radius:18px;transform:translate(-50%,-46%);opacity:0;visibility:hidden;transition:transform .2s,opacity .2s,visibility .2s}
+    .modal.show{transform:translate(-50%,-50%);opacity:1;visibility:visible}
   }
-  #panel h2{margin:0;font-size:18px}
+  .modal h2{margin:0;font-size:18px}
   .meta{color:var(--sub);font-size:13px;margin:2px 0 12px}
   .box{background:var(--bg);border-radius:10px;padding:8px 12px;font-size:13px;margin-bottom:12px}
   .box b{color:var(--ink)}
@@ -118,7 +126,7 @@
   <section id="app" class="hidden">
     <header>
       <div><div class="brand">小日子劃假系統</div><h1>名額管理</h1></div>
-      <div class="who"><span id="who"></span><br><button class="link" id="logoutBtn">登出</button></div>
+      <div class="who"><button class="setbtn" id="settingsBtn">⚙ 系統設定</button><br><span id="who"></span>・<button class="link" id="logoutBtn">登出</button></div>
     </header>
 
     <div class="bar">
@@ -140,7 +148,7 @@
 </div>
 
 <div id="backdrop"></div>
-<div id="panel" role="dialog" aria-modal="true">
+<div id="panel" class="modal" role="dialog" aria-modal="true">
   <h2 id="pTitle"></h2>
   <div class="meta" id="pMeta"></div>
   <div class="box" id="pNow"></div>
@@ -175,6 +183,42 @@
   <div class="warn hidden" id="resetWarn"></div>
 </div>
 
+<div id="setPanel" class="modal" role="dialog" aria-modal="true">
+  <h2>系統設定</h2>
+  <div class="meta">改完按儲存，員工畫面最多 15 秒就會更新</div>
+
+  <div class="field">
+    <label>開放劃假的月份</label>
+    <div class="grid2">
+      <div><select class="text" id="sStart"></select><div class="subnote">從哪個月開始</div></div>
+      <div><select class="text" id="sCount"></select><div class="subnote">一次開放幾個月</div></div>
+    </div>
+  </div>
+  <div class="preview" id="sPreview"></div>
+
+  <div class="field">
+    <label>劃假開放時間</label>
+    <div class="grid2">
+      <div><input class="text" type="datetime-local" id="sOpen"><div class="subnote">開始</div></div>
+      <div><input class="text" type="datetime-local" id="sClose"><div class="subnote">截止</div></div>
+    </div>
+  </div>
+
+  <div class="field">
+    <label>每人每月的限制</label>
+    <div class="grid2" style="grid-template-columns:1fr 1fr 1fr">
+      <div><input class="text" type="number" min="0" max="31" id="sLeave"><div class="subnote">指定假天數</div></div>
+      <div><input class="text" type="number" min="0" max="10" id="sWeekend"><div class="subnote">週末最多自選</div></div>
+      <div><input class="text" type="number" min="1" max="31" id="sConsec"><div class="subnote">最多連休</div></div>
+    </div>
+  </div>
+
+  <div class="btns">
+    <button class="btn ghost" id="sCancel">取消</button>
+    <button class="btn primary" id="sSave">儲存</button>
+  </div>
+</div>
+
 <div id="toast"></div>
 <div id="busy" class="hidden"><div class="spin"></div></div>
 
@@ -183,7 +227,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const WEEK = '日一二三四五六';
 const $ = s => document.querySelector(s);
 const state = { token: null, data: null, store: null, month: null, edit: null, busy: false };
@@ -323,7 +367,55 @@ function openPanel(role, i){
 
   $('#backdrop').classList.add('show'); $('#panel').classList.add('show');
 }
-function closePanel(){ state.edit = null; $('#backdrop').classList.remove('show'); $('#panel').classList.remove('show'); }
+function closePanel(){ state.edit = null; $('#backdrop').classList.remove('show'); $('#panel').classList.remove('show'); $('#setPanel').classList.remove('show'); }
+
+/* ===== 系統設定 ===== */
+function addMonths(mo, n){ const [y, m] = mo.split('-').map(Number); const t = new Date(y, m - 1 + n, 1); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0'); }
+function thisMonth(){ const t = new Date(); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0'); }
+function monthName(mo){ return mo.slice(0, 4) + ' 年 ' + Number(mo.slice(5)) + ' 月'; }
+function toLocalInput(s){ return s ? s.replace(' ', 'T') : ''; }
+function fromLocalInput(s){ return s ? s.replace('T', ' ').slice(0, 16) : ''; }
+
+function openSettings(){
+  const c = state.data.config;
+  const sel = $('#sStart'); sel.textContent = '';
+  const auto = el('option', '', '自動（每次都從下個月開始）'); auto.value = ''; sel.appendChild(auto);
+  const opts = [];
+  for (let i = 0; i <= 12; i++) opts.push(addMonths(thisMonth(), i));
+  if (c.startMonth && opts.indexOf(c.startMonth) < 0) opts.unshift(c.startMonth);
+  opts.forEach(mo => { const o = el('option', '', monthName(mo)); o.value = mo; sel.appendChild(o); });
+  sel.value = c.startMonth || '';
+  const cnt = $('#sCount'); cnt.textContent = '';
+  for (let i = 1; i <= 6; i++){ const o = el('option', '', i + ' 個月'); o.value = i; cnt.appendChild(o); }
+  cnt.value = Math.min(6, c.monthCount || 1);
+  $('#sOpen').value = toLocalInput(c.openAt);
+  $('#sClose').value = toLocalInput(c.closeAt);
+  $('#sLeave').value = c.maxLeave; $('#sWeekend').value = c.maxWeekend; $('#sConsec').value = c.maxConsecutive;
+  updatePreview();
+  $('#backdrop').classList.add('show'); $('#setPanel').classList.add('show');
+}
+function updatePreview(){
+  const c = state.data.config;
+  const start = $('#sStart').value || addMonths(thisMonth(), 1);
+  const n = Number($('#sCount').value);
+  const list = []; for (let i = 0; i < n; i++) list.push(Number(addMonths(start, i).slice(5)) + ' 月');
+  const p = $('#sPreview');
+  p.textContent = '員工可以劃：' + list.join('、') + ($('#sStart').value ? '' : '（每到新的月份會自動往後推）');
+  if (c.customList){ p.textContent += '　※ 試算表原本手動填了 ' + c.customList + '，儲存後會改用這裡的設定'; p.classList.add('warnbg'); }
+  else p.classList.remove('warnbg');
+}
+async function saveSettings(){
+  if (state.busy) return;
+  const settings = {
+    startMonth: $('#sStart').value, monthCount: Number($('#sCount').value),
+    openAt: fromLocalInput($('#sOpen').value), closeAt: fromLocalInput($('#sClose').value),
+    maxLeave: Number($('#sLeave').value), maxWeekend: Number($('#sWeekend').value), maxConsecutive: Number($('#sConsec').value)
+  };
+  setBusy(true);
+  try { const d = await api('adminSaveSettings', { settings }); render(d); closePanel(); toast(d.message || '已儲存'); }
+  catch(e){ handleError(e); }
+  finally { setBusy(false); }
+}
 function updateZeroHint(){ $('#zeroHint').textContent = Number($('#qty').value) === 0 ? '設成 0 就是這天禁休' : ''; }
 
 function targetDates(){
@@ -370,6 +462,11 @@ $('#resetBtn').onclick = reset;
 $('#cancelBtn').onclick = closePanel;
 $('#backdrop').onclick = closePanel;
 $('#logoutBtn').onclick = () => logout('');
+$('#settingsBtn').onclick = openSettings;
+$('#sStart').onchange = updatePreview;
+$('#sCount').onchange = updatePreview;
+$('#sSave').onclick = saveSettings;
+$('#sCancel').onclick = closePanel;
 </script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoad()"></script>
 </body>
