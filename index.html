@@ -175,7 +175,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '1.6.0';
+const VERSION = '1.7.0';
 const POLL_MS = 15000;
 const WEEK = '日一二三四五六';
 
@@ -380,6 +380,7 @@ function dayState(day){
   if (day.mine === '休假') return { cls: 'mine-leave', text: '休假' };
   if (day.mine === '可休') return { cls: 'mine-mgr', text: '可休' };
   if (day.mine) return { cls: 'mine-other', text: day.mine };
+  if (day.unlimited) return { cls: 'open', text: '可休' };
   if (day.quota === null) return { cls: 'na', text: '—' };
   if (day.quota <= 0) return { cls: 'blocked', text: '禁' };
   if (day.used >= day.quota) return { cls: 'full', text: '額滿' };
@@ -411,7 +412,9 @@ function fillSheet(date){
   if (!day) return;
   const md = Number(date.slice(5, 7)) + '/' + Number(date.slice(8));
   $('#sTitle').textContent = md + '（' + WEEK[day.dow] + '）';
-  $('#sMeta').textContent = day.holiday ? '全公司公休・' + day.holiday : day.quota === null
+  $('#sMeta').textContent = day.holiday ? '全公司公休・' + day.holiday
+    : day.unlimited ? d.me.role + '・不限人數，這天已有 ' + day.used + ' 人排休'
+    : day.quota === null
     ? '這天沒有設定' + d.me.role + '的名額'
     : d.me.role + '・' + day.scope + '・名額 ' + day.quota + ' 人，已排 ' + day.used + ' 人';
   $('#sNote').classList.toggle('hidden', !day.note);
@@ -444,16 +447,18 @@ function fillSheet(date){
   }
   if (day.mine) return disable('已排' + day.mine, '這天是主管排的' + day.mine + '，要調整請洽主管');
   if (d.window.status !== 'open') return disable('劃這天休假', '目前不在劃假時間');
-  if (day.quota === null) return disable('劃這天休假', '請洽主管設定名額');
-  if (day.quota <= 0) return disable('這天禁休', day.note);
-  if (day.used >= day.quota) return disable('名額已滿', '可以跟已排休的同事協調看看');
+  if (!day.unlimited){
+    if (day.quota === null) return disable('劃這天休假', '請洽主管設定名額');
+    if (day.quota <= 0) return disable('這天禁休', day.note);
+    if (day.used >= day.quota) return disable('名額已滿', '可以跟已排休的同事協調看看');
+  }
   if (d.counts.leave >= d.limits.maxLeave) return disable('劃這天休假', '指定假 ' + d.limits.maxLeave + ' 天已經劃滿');
   if (isWeekend && d.limits.weekendCapped && d.counts.weekend >= d.limits.maxWeekend)
     return disable('劃這天休假', '週六日自選 ' + d.limits.maxWeekend + ' 天已經選滿');
 
   btn.className = 'btn primary';
   btn.textContent = '劃這天休假';
-  hint.textContent = '剩 ' + (day.quota - day.used) + ' 個名額';
+  hint.textContent = day.unlimited ? '這個職務每天不限人數' : '剩 ' + (day.quota - day.used) + ' 個名額';
   btn.onclick = () => act('book', date);
 }
 
