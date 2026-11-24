@@ -41,6 +41,9 @@
   .lv-可休{background:#e6effa;color:#4a7fb5;border:1px solid #4a7fb5}
   .lv-特休{background:var(--ov-bg);color:var(--ov);border:1px solid var(--ov)}
   .lv-other{background:var(--full-bg);color:var(--ink)}
+  .lv{position:relative}
+  .lv.adm::after{content:'';position:absolute;top:-4px;right:-4px;width:8px;height:8px;border-radius:50%;background:#7b5ea7;border:1.5px solid #fff}
+  .bytag{font-size:11px;color:#7b5ea7;margin-left:4px}
   #roster td.sum{font-size:12px;color:var(--sub);padding:0 8px;white-space:nowrap}
   #roster tfoot td{font-size:12px;color:var(--sub);padding:6px 0;background:var(--bg)}
   .types{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
@@ -237,17 +240,18 @@
     </div>
     <div id="rosterView" class="hidden">
       <div class="legend">
-        <span><span class="lv lv-休假">休</span> 休假（員工自己劃）</span>
+        <span><span class="lv lv-休假">休</span> 休假（算指定假）</span>
         <span><span class="lv lv-可休">可</span> 可休（主管排）</span>
         <span><span class="lv lv-特休">特</span> 特休</span>
         <span><span class="lv lv-公休">公</span> 全公司公休</span>
+        <span><span class="lv lv-休假 adm">休</span> 右上角紫點＝管理員代排</span>
       </div>
       <div class="rtools">
         <button id="byDateBtn">📅 依日期列出：每天誰休</button>
         <span class="tag" style="align-self:center">點同仁名字＝看他這個月的排休</span>
       </div>
       <div class="tablewrap"><table id="roster"></table></div>
-      <div class="hint">點任一格就能幫同仁排休、改類型或取消；點上面的日期可以設定全公司禁休或公休。超過名額或個人上限時會先提醒，確認後才會排。黃色名字＝還沒填 Gmail，不能自己登入劃假。</div>
+      <div class="hint">點任一格就能幫同仁排休、改類型或取消（管理員代排不受每日名額限制，超過個人每月上限時會先提醒）；點上面的日期可以設定全公司禁休或公休。黃色名字＝還沒填 Gmail，不能自己登入劃假。</div>
     </div>
     <footer id="foot"></footer>
   </section>
@@ -404,7 +408,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '1.8.0';
+const VERSION = '1.9.0';
 const WEEK = '日一二三四五六';
 const $ = s => document.querySelector(s);
 const state = { token: null, me: null, data: null, roster: null, view: 'quota', store: null, rStore: '全部', month: null, edit: null, leave: null, busy: false };
@@ -551,8 +555,9 @@ function renderRoster(r){
         b.appendChild(el('span', 'lv lv-公休', '公')); b.title = day.date + ' 全公司公休（' + day.holiday + '）';
         b.onclick = () => openDay(day); td.appendChild(b); tr.appendChild(td); return;
       }
-      if (type){ b.appendChild(el('span', lvClass(type), lvShort(type))); perDay[i]++; cAll++; if (type === '休假') cLeave++; if (type === '可休') cMgr++; }
-      b.title = p.name + ' ' + day.date + (type ? ' ' + type : '');
+      const byAdm = ((r.leavesBy || {})[p.key] || {})[day.date] === 'admin';
+      if (type){ b.appendChild(el('span', lvClass(type) + (byAdm ? ' adm' : ''), lvShort(type))); perDay[i]++; cAll++; if (type === '休假') cLeave++; if (type === '可休') cMgr++; }
+      b.title = p.name + ' ' + day.date + (type ? ' ' + type + (byAdm ? '（管理員代排）' : '') : '');
       if (!p.inactive) b.onclick = () => openLeave(p, day);
       td.appendChild(b); tr.appendChild(td);
     });
@@ -582,7 +587,8 @@ function fillLeave(){
   const cur = (r.leaves[p.key] || {})[lv.date] || null;
   $('#lTitle').textContent = p.name + '・' + Number(lv.date.slice(5, 7)) + '/' + Number(lv.date.slice(8)) + '（' + WEEK[day.dow] + '）';
   $('#lMeta').textContent = p.store + '・' + p.role + (p.hasEmail ? '' : '・還沒填 Gmail');
-  $('#lNow').textContent = cur ? '目前：' + cur : '目前：上班（沒有排休）';
+  const curAdm = ((r.leavesBy || {})[p.key] || {})[lv.date] === 'admin';
+  $('#lNow').textContent = cur ? '目前：' + cur + (curAdm ? '（管理員代排）' : '（同仁自己劃）') : '目前：上班（沒有排休）';
   const box = $('#lTypes'); box.textContent = '';
   ['休假', '可休', '特休'].forEach(t => {
     const b = el('button', 't-' + t + (cur === t ? ' cur' : ''), t);
@@ -792,14 +798,14 @@ function mdw(date, dow){ return Number(date.slice(5, 7)) + '/' + Number(date.sli
 function rosterPeople(){ const r = state.roster; return r.people.filter(p => state.rStore === '全部' || p.store === state.rStore); }
 function whoOff(date){
   const r = state.roster;
-  return rosterPeople().filter(p => (r.leaves[p.key] || {})[date]).map(p => ({ p, type: r.leaves[p.key][date] }));
+  return rosterPeople().filter(p => (r.leaves[p.key] || {})[date]).map(p => ({ p, type: r.leaves[p.key][date], adm: ((r.leavesBy || {})[p.key] || {})[date] === 'admin' }));
 }
 function whoLine(off){
   const w = el('div', 'who');
   if (!off.length){ w.appendChild(el('span', 'none', '沒有人排休')); return w; }
   off.forEach(o => {
     const b = el('button');
-    b.appendChild(el('span', lvClass(o.type), lvShort(o.type))); b.append(' ' + o.p.name + ' ');
+    b.appendChild(el('span', lvClass(o.type) + (o.adm ? ' adm' : ''), lvShort(o.type))); b.append(' ' + o.p.name + ' ');
     b.appendChild(el('small', '', o.p.store + '・' + o.p.role));
     b.onclick = () => openPerson(o.p.key);
     w.appendChild(b);
@@ -847,7 +853,11 @@ function openPerson(key){
     li.appendChild(el('span', 'd' + (d.dow === 6 ? ' sat' : d.dow === 0 ? ' sun' : ''), mdw(d.date, d.dow)));
     const w = el('div', 'who');
     if (d.holiday){ w.appendChild(el('span', 'lv lv-公休', '公')); w.append(' 全公司公休・' + d.holiday); }
-    else { const t = mine[d.date]; w.appendChild(el('span', lvClass(t), lvShort(t))); w.append(' ' + t); }
+    else {
+      const t = mine[d.date], adm = ((r.leavesBy || {})[key] || {})[d.date] === 'admin';
+      w.appendChild(el('span', lvClass(t) + (adm ? ' adm' : ''), lvShort(t))); w.append(' ' + t);
+      w.appendChild(el('span', 'bytag', adm ? '管理員代排' : '自己劃'));
+    }
     li.appendChild(w); ul.appendChild(li);
   });
   if (!ul.children.length) ul.appendChild(el('li', 'none', '這個月還沒有排休'));
