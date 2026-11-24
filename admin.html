@@ -37,8 +37,8 @@
   #roster .rowhead small{display:block;font-weight:400;color:var(--sub);font-size:11px}
   #roster .rowhead .noemail{color:var(--ov)}
   .lv{display:inline-block;min-width:24px;border-radius:6px;padding:2px 4px;font-size:12px;font-weight:700}
-  .lv-同仁排休{background:var(--accent);color:#fff}
-  .lv-公司排休{background:#e6effa;color:#4a7fb5;border:1px solid #4a7fb5}
+  .lv-自排{background:var(--accent);color:#fff}
+  .lv-公排{background:#e6effa;color:#4a7fb5;border:1px solid #4a7fb5}
   .lv-特休{background:var(--ov-bg);color:var(--ov);border:1px solid var(--ov)}
   .lv-other{background:var(--full-bg);color:var(--ink)}
   .lv{position:relative}
@@ -49,8 +49,8 @@
   .types{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
   .types button{border:1.5px solid var(--line);background:var(--card);border-radius:12px;padding:12px 0;font:inherit;font-weight:700;cursor:pointer;color:var(--ink)}
   .types button.cur{outline:2px solid var(--ink);outline-offset:1px}
-  .types .t-同仁排休{color:var(--accent);border-color:var(--accent)}
-  .types .t-公司排休{color:#4a7fb5;border-color:#4a7fb5}
+  .types .t-自排{color:var(--accent);border-color:var(--accent)}
+  .types .t-公排{color:#4a7fb5;border-color:#4a7fb5}
   .types .t-特休{color:var(--ov);border-color:var(--ov)}
   .confirmbox{background:var(--ov-bg);border:1px solid var(--ov);border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:10px;color:#7a5a17}
   .confirmbox b{display:block;margin-bottom:4px}
@@ -229,7 +229,7 @@
     <div class="legend" id="quotaLegend">
       <span><i style="background:var(--ov-bg);border-color:var(--ov)"></i>特別設定（日期覆寫）</span>
       <span><i style="background:var(--full-bg)"></i>0 = 禁休</span>
-      <span><i style="background:#eaf3ec;border-color:#4f8a5b"></i>公 = 全公司公休</span>
+      <span><i style="background:#eaf3ec;border-color:#4f8a5b"></i>休 = 全公司公休</span>
       <span>不限 = 不受名額控制的職務</span>
       <span>數字＝可休人數，下面小字＝已排人數</span>
     </div>
@@ -240,18 +240,18 @@
     </div>
     <div id="rosterView" class="hidden">
       <div class="legend">
-        <span><span class="lv lv-同仁排休">同</span> 同仁排休（同仁自己挑，每月上限 5 天）</span>
-        <span><span class="lv lv-公司排休">司</span> 公司排休（主管排）</span>
+        <span><span class="lv lv-自排">自</span> 自排（同仁自己挑，每月上限 5 天）</span>
+        <span><span class="lv lv-公排">排</span> 公排（公司排，不算進那 5 天）</span>
         <span><span class="lv lv-特休">特</span> 特休</span>
-        <span><span class="lv lv-公休">公</span> 全公司公休</span>
-        <span><span class="lv lv-同仁排休 adm">同</span> 右上角紫點＝管理員代排</span>
+        <span><span class="lv lv-公休">休</span> 全公司公休</span>
+        <span><span class="lv lv-自排 adm">自</span> 右上角紫點＝管理員代排</span>
       </div>
       <div class="rtools">
         <button id="byDateBtn">📅 依日期列出：每天誰休</button>
         <span class="tag" style="align-self:center">點同仁名字＝看他這個月的排休</span>
       </div>
       <div class="tablewrap"><table id="roster"></table></div>
-      <div class="hint">點任一格就能幫同仁排休、改類型或取消（管理員代排不受每日名額限制，超過個人每月上限時會先提醒）；點上面的日期可以設定全公司禁休或公休。黃色名字＝還沒填 Gmail，不能自己登入劃假。</div>
+      <div class="hint">點任一格就能幫同仁排假、改類型或取消（管理員代排不受每日名額限制，超過個人每月上限時會先提醒）；點上面的日期可以設定全公司禁休或公休。黃色名字＝還沒填 Gmail，不能自己登入劃假。</div>
     </div>
     <footer id="foot"></footer>
   </section>
@@ -317,7 +317,7 @@
   <div class="field">
     <label>每人每月的限制</label>
     <div class="grid2" style="grid-template-columns:1fr 1fr 1fr">
-      <div><input class="text" type="number" min="0" max="31" id="sLeave"><div class="subnote">同仁排休天數</div></div>
+      <div><input class="text" type="number" min="0" max="31" id="sLeave"><div class="subnote">自排天數</div></div>
       <div><input class="text" type="number" min="0" max="10" id="sWeekend"><div class="subnote">週末最多自選</div></div>
       <div><input class="text" type="number" min="1" max="31" id="sConsec"><div class="subnote">最多連休</div></div>
     </div>
@@ -358,7 +358,7 @@
   <div class="dmode" id="dModes">
     <label><input type="radio" name="dmode" value="normal"><span><b>正常</b><small>照「名額規則」和各職位的名額設定</small></span></label>
     <label><input type="radio" name="dmode" value="block"><span><b>全公司禁休</b><small>所有人都不能劃假（例如盤點、大檔期）。已經排的假會保留，請自己到總表確認</small></span></label>
-    <label><input type="radio" name="dmode" value="holiday"><span><b>全公司公休</b><small>所有人統一放假（例如過年），不用劃、不佔每月同仁排休。這天原本排的假會自動刪掉</small></span></label>
+    <label><input type="radio" name="dmode" value="holiday"><span><b>全公司公休</b><small>所有人統一放假（例如過年），不用劃、不佔每月自排。這天原本排的假會自動刪掉</small></span></label>
   </div>
   <div class="field" id="dNoteF">
     <label for="dNote" id="dNoteL">名稱</label>
@@ -392,7 +392,7 @@
 
 <div id="rulesPanel" class="modal" role="dialog" aria-modal="true">
   <h2>職務與每日名額</h2>
-  <div class="meta">勾選的職務每天休假有人數限制；沒勾的職務每天不限人數（每人每月同仁排休、週末、連休上限照算）。特定日期要例外，到「名額設定」點那一格改。</div>
+  <div class="meta">勾選的職務每天休假有人數限制；沒勾的職務每天不限人數（每人每月自排、週末、連休上限照算）。特定日期要例外，到「名額設定」點那一格改。</div>
   <div id="rList"></div>
   <div class="btns" style="margin-top:12px">
     <button class="btn ghost" id="rCancel">取消</button>
@@ -408,7 +408,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '2.0.0';
+const VERSION = '2.1.0';
 const WEEK = '日一二三四五六';
 const $ = s => document.querySelector(s);
 const state = { token: null, me: null, data: null, roster: null, view: 'quota', store: null, rStore: '全部', month: null, edit: null, leave: null, busy: false };
@@ -512,9 +512,9 @@ function setView(v){
 }
 
 /* ===== 排休總表 ===== */
-const T_SELF = '同仁排休', T_MGR = '公司排休';
+const T_SELF = '自排', T_MGR = '公排';
 function lvClass(t){ return [T_SELF, T_MGR, '特休'].indexOf(t) >= 0 ? 'lv lv-' + t : 'lv lv-other'; }
-function lvShort(t){ return { '同仁排休': '同', '公司排休': '司', '特休': '特' }[t] || String(t).slice(0, 1); }
+function lvShort(t){ return { '自排': '自', '公排': '排', '特休': '特' }[t] || String(t).slice(0, 1); }
 function renderRoster(r){
   state.roster = r; state.month = r.month;
   const [y, m] = r.month.split('-');
@@ -530,7 +530,7 @@ function renderRoster(r){
   const thead = el('thead'), hr = el('tr');
   hr.appendChild(el('th', 'rowhead', '同仁'));
   r.days.forEach(day => hr.appendChild(dayHead(day)));
-  hr.appendChild(el('th', '', '同仁')); hr.appendChild(el('th', '', '公司')); hr.appendChild(el('th', '', '合計'));
+  hr.appendChild(el('th', '', '自排')); hr.appendChild(el('th', '', '公排')); hr.appendChild(el('th', '', '合計'));
   thead.appendChild(hr); t.appendChild(thead);
   const tb = el('tbody'); let lastRole = null;
   const perDay = r.days.map(() => 0);
@@ -553,7 +553,7 @@ function renderRoster(r){
       const td = el('td', 'c' + (day.dow === 0 || day.dow === 6 ? ' we' : '') + (day.holiday ? ' hol' : ''));
       const b = el('button');
       if (day.holiday){
-        b.appendChild(el('span', 'lv lv-公休', '公')); b.title = day.date + ' 全公司公休（' + day.holiday + '）';
+        b.appendChild(el('span', 'lv lv-公休', '休')); b.title = day.date + ' 全公司公休（' + day.holiday + '）';
         b.onclick = () => openDay(day); td.appendChild(b); tr.appendChild(td); return;
       }
       const byAdm = ((r.leavesBy || {})[p.key] || {})[day.date] === 'admin';
@@ -657,7 +657,7 @@ function render(d){
       if (day.holiday){
         const td = el('td', cls.concat('hol').join(' ')); const b = el('button');
         b.title = day.date + ' 全公司公休（' + day.holiday + '）';
-        b.appendChild(el('span', 'q', '公')); b.appendChild(el('span', 'u', ''));
+        b.appendChild(el('span', 'q', '休')); b.appendChild(el('span', 'u', ''));
         b.onclick = () => openDay(day); td.appendChild(b); tr.appendChild(td); return;
       }
       if (c.unlimited){
@@ -827,7 +827,7 @@ function fillList(){
     shown++;
     const li = el('li');
     li.appendChild(el('span', 'd' + (day.dow === 6 ? ' sat' : day.dow === 0 ? ' sun' : ''), mdw(day.date, day.dow)));
-    if (day.holiday){ const w = el('div', 'who'); w.appendChild(el('span', 'lv lv-公休', '公')); w.append(' 全公司公休・' + day.holiday); li.appendChild(w); }
+    if (day.holiday){ const w = el('div', 'who'); w.appendChild(el('span', 'lv lv-公休', '休')); w.append(' 全公司公休・' + day.holiday); li.appendChild(w); }
     else li.appendChild(whoLine(off));
     ul.appendChild(li);
   });
@@ -846,14 +846,14 @@ function openPerson(key){
   const wk = days.filter(d => mine[d.date] === T_SELF && (d.dow === 0 || d.dow === 6)).length;
   const hol = r.days.filter(d => d.holiday).length;
   const st = $('#ppStats'); st.textContent = '';
-  [[leave + ' / ' + r.maxLeave, '同仁排休', leave > r.maxLeave], [String(wk), '週末自選', false], [String(cnt(T_MGR)), '公司排休', false], [String(days.length + hol), '合計放假' , false]]
+  [[leave + ' / ' + r.maxLeave, '自排', leave > r.maxLeave], [String(wk), '週末自選', false], [String(cnt(T_MGR)), '公排', false], [String(days.length + hol), '合計放假' , false]]
     .forEach(([v, l, over]) => { const d = el('div', over ? 'over' : ''); d.appendChild(el('b', '', v)); d.appendChild(el('small', '', l)); st.appendChild(d); });
   const ul = $('#ppList'); ul.textContent = '';
   r.days.filter(d => mine[d.date] || d.holiday).forEach(d => {
     const li = el('li');
     li.appendChild(el('span', 'd' + (d.dow === 6 ? ' sat' : d.dow === 0 ? ' sun' : ''), mdw(d.date, d.dow)));
     const w = el('div', 'who');
-    if (d.holiday){ w.appendChild(el('span', 'lv lv-公休', '公')); w.append(' 全公司公休・' + d.holiday); }
+    if (d.holiday){ w.appendChild(el('span', 'lv lv-公休', '休')); w.append(' 全公司公休・' + d.holiday); }
     else {
       const t = mine[d.date], adm = ((r.leavesBy || {})[key] || {})[d.date] === 'admin';
       w.appendChild(el('span', lvClass(t) + (adm ? ' adm' : ''), lvShort(t))); w.append(' ' + t);
