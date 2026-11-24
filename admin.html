@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>小日子劃假系統｜名額管理</title>
+<style>
+  :root{
+    --bg:#faf6f1; --card:#fff; --ink:#3b2f2a; --sub:#8a7b72; --line:#ece3da;
+    --accent:#c8553d; --accent-bg:#fbe9e4; --ov:#b8892c; --ov-bg:#fdf3dc;
+    --ok:#4f8a5b; --full-bg:#f1ece7; --sat:#4a7fb5; --sun:#c8553d;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;font-size:14px;line-height:1.5}
+  .hidden{display:none!important}
+  .wrap{max-width:1400px;margin:0 auto;padding:16px 14px 40px}
+  .brand{font-size:12px;letter-spacing:.15em;color:var(--sub)}
+  h1{font-size:21px;margin:2px 0 0}
+  #login{min-height:90vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center}
+  #login p{margin:0;color:var(--sub)}
+  #loginMsg{color:var(--accent);min-height:1.5em}
+
+  header{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  .who{font-size:12px;color:var(--sub);text-align:right}
+  .link{background:none;border:0;color:var(--sub);text-decoration:underline;cursor:pointer;font-size:12px;padding:0}
+
+  .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px}
+  .month{display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:3px}
+  .month button{border:0;background:none;font-size:18px;width:32px;height:32px;border-radius:50%;cursor:pointer;color:var(--ink)}
+  .month button:hover{background:var(--bg)}
+  .month b{min-width:100px;text-align:center}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 14px;cursor:pointer;font:inherit;color:var(--ink)}
+  .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .tag{font-size:12px;color:var(--sub)}
+  .tag b{color:var(--accent)}
+
+  .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--sub);margin:4px 0 8px}
+  .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-2px;border:1px solid var(--line)}
+
+  .tablewrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:14px}
+  table{border-collapse:separate;border-spacing:0;min-width:100%}
+  th,td{padding:0;text-align:center;border-bottom:1px solid var(--line);border-right:1px solid var(--line)}
+  thead th{position:sticky;top:0;background:var(--card);font-weight:600;font-size:12px;padding:6px 0;min-width:46px}
+  thead th small{display:block;font-weight:400;color:var(--sub)}
+  thead th.sat,thead th.sat small{color:var(--sat)} thead th.sun,thead th.sun small{color:var(--sun)}
+  .rowhead{position:sticky;left:0;background:var(--card);z-index:1;text-align:left;padding:0 12px;white-space:nowrap;font-weight:600;min-width:72px}
+  thead .rowhead{z-index:2}
+  td button{width:100%;height:52px;border:0;background:none;cursor:pointer;font:inherit;color:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+  td button:hover{background:var(--bg)}
+  td .q{font-size:17px;font-weight:700;line-height:1.1}
+  td .u{font-size:10px;color:var(--sub)}
+  td.we{background:#fcfaf7}
+  td.ov{background:var(--ov-bg);box-shadow:inset 0 0 0 2px var(--ov)}
+  td.zero .q{color:var(--accent)}
+  td.zero{background:var(--full-bg)}
+  td.ov.zero{background:var(--full-bg)}
+  td.full .u{color:var(--accent);font-weight:700}
+  td.na .q{color:var(--line)}
+  .hint{font-size:12px;color:var(--sub);margin-top:8px}
+  footer{text-align:center;color:var(--sub);font-size:11px;margin-top:16px}
+
+  /* 編輯面板 */
+  #backdrop{position:fixed;inset:0;background:rgba(40,30,25,.35);opacity:0;pointer-events:none;transition:opacity .2s;z-index:10}
+  #backdrop.show{opacity:1;pointer-events:auto}
+  #panel{position:fixed;left:50%;bottom:0;transform:translate(-50%,105%);width:min(460px,100%);background:var(--card);
+    border-radius:18px 18px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));transition:transform .22s;z-index:11;
+    box-shadow:0 -6px 24px rgba(0,0,0,.1);max-height:92vh;overflow:auto}
+  #panel.show{transform:translate(-50%,0)}
+  @media(min-width:700px){
+    #panel{top:50%;bottom:auto;border-radius:18px;transform:translate(-50%,-46%);opacity:0;visibility:hidden;transition:transform .2s,opacity .2s,visibility .2s}
+    #panel.show{transform:translate(-50%,-50%);opacity:1;visibility:visible}
+  }
+  #panel h2{margin:0;font-size:18px}
+  .meta{color:var(--sub);font-size:13px;margin:2px 0 12px}
+  .box{background:var(--bg);border-radius:10px;padding:8px 12px;font-size:13px;margin-bottom:12px}
+  .box b{color:var(--ink)}
+  .people{margin-top:4px;color:var(--sub)}
+  .stepper{display:flex;align-items:center;justify-content:center;gap:14px;margin:6px 0 14px}
+  .stepper button{width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:var(--card);font-size:22px;cursor:pointer;color:var(--ink)}
+  .stepper input{width:80px;text-align:center;font-size:30px;font-weight:700;border:0;border-bottom:2px solid var(--line);background:none;color:var(--ink);font-family:inherit}
+  .stepper input:focus{outline:none;border-color:var(--accent)}
+  .zerohint{text-align:center;font-size:12px;color:var(--accent);margin:-8px 0 10px;min-height:1.2em}
+  .field{margin-bottom:12px}
+  .field > label{display:block;font-size:12px;color:var(--sub);margin-bottom:4px}
+  .radio{display:flex;flex-direction:column;gap:6px}
+  .radio label{display:flex;gap:8px;align-items:flex-start;background:var(--bg);border-radius:10px;padding:8px 10px;cursor:pointer}
+  .radio input{margin-top:3px}
+  .radio small{display:block;color:var(--sub)}
+  .text{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 10px;font:inherit;background:var(--card);color:var(--ink)}
+  .check{display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:14px;cursor:pointer}
+  .btns{display:flex;gap:8px}
+  .btn{flex:1;border:0;border-radius:12px;padding:12px;font:inherit;font-weight:700;font-size:15px;cursor:pointer}
+  .btn.primary{background:var(--accent);color:#fff}
+  .btn.ghost{background:var(--card);border:1.5px solid var(--line);color:var(--ink)}
+  .btn.reset{background:var(--card);border:1.5px solid var(--ov);color:var(--ov)}
+  .warn{font-size:12px;color:var(--ov);margin-top:8px}
+
+  #toast{position:fixed;left:50%;top:14px;transform:translate(-50%,calc(-100% - 30px));background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;transition:transform .25s;z-index:30;max-width:90vw}
+  #toast.show{transform:translate(-50%,0)} #toast.err{background:var(--accent)}
+  #busy{position:fixed;inset:0;background:rgba(250,246,241,.6);display:flex;align-items:center;justify-content:center;z-index:25}
+  .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s .8s linear infinite}
+  @keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="login">
+    <div class="brand">SMALLDAY PHOTOGRAPHY</div>
+    <h1>名額管理</h1>
+    <p>請用管理員的 Google 帳號登入</p>
+    <div id="gbtn"></div>
+    <div id="loginMsg"></div>
+  </section>
+
+  <section id="app" class="hidden">
+    <header>
+      <div><div class="brand">小日子劃假系統</div><h1>名額管理</h1></div>
+      <div class="who"><span id="who"></span><br><button class="link" id="logoutBtn">登出</button></div>
+    </header>
+
+    <div class="bar">
+      <div class="month"><button id="prev" aria-label="上個月">‹</button><b id="monthLabel"></b><button id="next" aria-label="下個月">›</button></div>
+      <div class="chips" id="stores"></div>
+      <span class="tag" id="bookingTag"></span>
+    </div>
+
+    <div class="legend">
+      <span><i style="background:var(--ov-bg);border-color:var(--ov)"></i>特別設定（日期覆寫）</span>
+      <span><i style="background:var(--full-bg)"></i>0 = 禁休</span>
+      <span>數字＝可休人數，下面小字＝已排人數</span>
+    </div>
+
+    <div class="tablewrap"><table id="grid"></table></div>
+    <div class="hint">點任一格就能改那天、那個職位的名額。沒有特別設定的格子，用的是「名額規則」的預設值。</div>
+    <footer id="foot"></footer>
+  </section>
+</div>
+
+<div id="backdrop"></div>
+<div id="panel" role="dialog" aria-modal="true">
+  <h2 id="pTitle"></h2>
+  <div class="meta" id="pMeta"></div>
+  <div class="box" id="pNow"></div>
+
+  <div class="stepper">
+    <button id="minus" aria-label="減少">−</button>
+    <input id="qty" type="number" min="0" max="99" inputmode="numeric">
+    <button id="plus" aria-label="增加">＋</button>
+  </div>
+  <div class="zerohint" id="zeroHint"></div>
+
+  <div class="field">
+    <label>套用範圍</label>
+    <div class="radio">
+      <label><input type="radio" name="scope" value="store" checked><span><b id="scopeStoreLabel"></b><small>只改這間門市，名額由這間店自己算</small></span></label>
+      <label><input type="radio" name="scope" value="all"><span><b>所有門市</b><small>每間店都改成這個數字；原本是合計的，就改合計人數</small></span></label>
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="note">備註（員工看得到，例如「業務會議」「檔期」）</label>
+    <input class="text" id="note" maxlength="50">
+  </div>
+
+  <label class="check"><input type="checkbox" id="sameDow"><span id="sameDowLabel"></span></label>
+
+  <div class="btns">
+    <button class="btn ghost" id="cancelBtn">取消</button>
+    <button class="btn primary" id="saveBtn">儲存</button>
+  </div>
+  <div class="btns" style="margin-top:8px"><button class="btn reset hidden" id="resetBtn"></button></div>
+  <div class="warn hidden" id="resetWarn"></div>
+</div>
+
+<div id="toast"></div>
+<div id="busy" class="hidden"><div class="spin"></div></div>
+
+<script>
+const CONFIG = {
+  API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
+  CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
+};
+const VERSION = '1.1.0';
+const WEEK = '日一二三四五六';
+const $ = s => document.querySelector(s);
+const state = { token: null, data: null, store: null, month: null, edit: null, busy: false };
+const store = {
+  get(k){ try { return sessionStorage.getItem(k); } catch(e){ return null; } },
+  set(k,v){ try { sessionStorage.setItem(k,v); } catch(e){} },
+  del(k){ try { sessionStorage.removeItem(k); } catch(e){} }
+};
+
+/* ===== 登入 ===== */
+function onGsiLoad(){
+  google.accounts.id.initialize({ client_id: CONFIG.CLIENT_ID, callback: r => setToken(r.credential), auto_select: true, cancel_on_tap_outside: false });
+  google.accounts.id.renderButton($('#gbtn'), { theme:'outline', size:'large', shape:'pill', text:'signin_with', locale:'zh-TW', width:260 });
+  const saved = store.get('adminToken');
+  if (saved && !expired(saved)) setToken(saved); else { showLogin(''); google.accounts.id.prompt(); }
+}
+function expired(t){
+  try { const p = JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); return p.exp * 1000 < Date.now() + 60000; }
+  catch(e){ return true; }
+}
+function setToken(t){ state.token = t; store.set('adminToken', t); load(); }
+function showLogin(msg){ closePanel(); $('#app').classList.add('hidden'); $('#login').classList.remove('hidden'); $('#loginMsg').textContent = msg || ''; }
+function logout(msg){ state.token = null; store.del('adminToken'); if (window.google) google.accounts.id.disableAutoSelect(); showLogin(msg); }
+
+/* ===== API ===== */
+async function api(action, extra){
+  let data;
+  try {
+    const res = await fetch(CONFIG.API_URL, { method:'POST', body: JSON.stringify(Object.assign({ action, idToken: state.token }, extra || {})) });
+    data = await res.json();
+  } catch(e){ const err = new Error('連線失敗，請檢查網路後再試'); err.code = 'NETWORK'; throw err; }
+  if (!data.ok){ const err = new Error(data.error || '發生錯誤'); err.code = data.code; throw err; }
+  return data;
+}
+function handleError(e){
+  if (e.code === 'AUTH'){ logout(e.message); if (window.google) google.accounts.id.prompt(); return; }
+  if (e.code === 'NOT_ADMIN' || e.code === 'SETUP'){ logout(e.message); return; }
+  toast(e.message, true);
+}
+async function load(month){
+  setBusy(true);
+  try { render(await api('adminLoad', { month: month || state.month })); }
+  catch(e){ handleError(e); }
+  finally { setBusy(false); }
+}
+
+/* ===== 畫面 ===== */
+function render(d){
+  state.data = d; state.month = d.month;
+  if (!state.store || d.stores.indexOf(state.store) < 0) state.store = d.stores[0];
+  $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
+  $('#who').textContent = d.admin;
+  const [y, m] = d.month.split('-');
+  $('#monthLabel').textContent = y + ' 年 ' + Number(m) + ' 月';
+  $('#bookingTag').innerHTML = '';
+  $('#bookingTag').append('目前開放劃假：', el('b', '', d.bookingMonth));
+
+  const chips = $('#stores'); chips.textContent = '';
+  d.stores.forEach(s => {
+    const c = el('button', 'chip' + (s === state.store ? ' on' : ''), s);
+    c.onclick = () => { state.store = s; render(state.data); };
+    chips.appendChild(c);
+  });
+
+  const t = $('#grid'); t.textContent = '';
+  const thead = el('thead'), hr = el('tr');
+  hr.appendChild(el('th', 'rowhead', state.store));
+  d.days.forEach(day => {
+    const th = el('th', day.dow === 6 ? 'sat' : day.dow === 0 ? 'sun' : '', String(Number(day.date.slice(8))));
+    th.appendChild(el('small', '', WEEK[day.dow]));
+    hr.appendChild(th);
+  });
+  thead.appendChild(hr); t.appendChild(thead);
+
+  const tb = el('tbody');
+  d.roles.forEach(role => {
+    const tr = el('tr');
+    tr.appendChild(el('th', 'rowhead', role));
+    d.grid[state.store][role].forEach((c, i) => {
+      const day = d.days[i];
+      const cls = [];
+      if (day.dow === 0 || day.dow === 6) cls.push('we');
+      if (c.override) cls.push('ov');
+      if (c.quota === null) cls.push('na');
+      else if (c.quota <= 0) cls.push('zero');
+      else if (c.used >= c.quota) cls.push('full');
+      const td = el('td', cls.join(' '));
+      const b = el('button');
+      b.title = day.date + ' ' + role + (c.note ? '｜' + c.note : '');
+      b.appendChild(el('span', 'q', c.quota === null ? '—' : c.quota <= 0 ? '禁' : String(c.quota)));
+      b.appendChild(el('span', 'u', c.used ? '已 ' + c.used : ''));
+      b.onclick = () => openPanel(role, i);
+      td.appendChild(b); tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb);
+  $('#foot').textContent = '名額管理 v' + VERSION + '・後端 v' + d.version + '・更新於 ' + d.serverTime.slice(11, 19);
+}
+
+/* ===== 編輯面板 ===== */
+function openPanel(role, i){
+  const d = state.data, day = d.days[i], c = d.grid[state.store][role][i];
+  state.edit = { role, i };
+  const md = Number(day.date.slice(5, 7)) + '/' + Number(day.date.slice(8));
+  $('#pTitle').textContent = md + '（' + WEEK[day.dow] + '）' + role;
+  $('#pMeta').textContent = '正在看：' + state.store;
+
+  const now = $('#pNow'); now.textContent = '';
+  const line = el('div');
+  line.append('目前名額 ', el('b', '', c.quota === null ? '未設定' : c.quota <= 0 ? '0（禁休）' : c.quota + ' 人'),
+    '・' + c.scope + '・' + (c.override ? '特別設定' : '預設規則') + (c.note ? '・' + c.note : ''));
+  now.appendChild(line);
+  now.appendChild(el('div', 'people', c.people.length
+    ? '已排：' + c.people.map(p => p.name + '（' + p.store + '・' + p.type + '）').join('、')
+    : '目前沒有人排休'));
+
+  $('#qty').value = c.quota === null ? 1 : c.quota;
+  $('#note').value = c.override ? c.note : '';
+  $('#scopeStoreLabel').textContent = '只有' + state.store;
+  const scopeAll = c.override && !c.override.store;
+  document.querySelector('input[name=scope][value=' + (scopeAll ? 'all' : 'store') + ']').checked = true;
+  $('#sameDow').checked = false;
+  $('#sameDowLabel').textContent = '套用到這個月所有星期' + WEEK[day.dow];
+  updateZeroHint();
+
+  const rb = $('#resetBtn'), rw = $('#resetWarn');
+  if (c.override){
+    rb.classList.remove('hidden');
+    rb.textContent = '恢復預設（刪除這個特別設定）';
+    const parts = [];
+    if (!c.override.role) parts.push('所有職位');
+    if (!c.override.store) parts.push('所有門市');
+    rw.classList.toggle('hidden', !parts.length);
+    rw.textContent = parts.length ? '注意：這個特別設定套用在' + parts.join('、') + '，恢復預設會一起恢復。' : '';
+  } else { rb.classList.add('hidden'); rw.classList.add('hidden'); }
+
+  $('#backdrop').classList.add('show'); $('#panel').classList.add('show');
+}
+function closePanel(){ state.edit = null; $('#backdrop').classList.remove('show'); $('#panel').classList.remove('show'); }
+function updateZeroHint(){ $('#zeroHint').textContent = Number($('#qty').value) === 0 ? '設成 0 就是這天禁休' : ''; }
+
+function targetDates(){
+  const d = state.data, day = d.days[state.edit.i];
+  return $('#sameDow').checked ? d.days.filter(x => x.dow === day.dow).map(x => x.date) : [day.date];
+}
+
+async function save(){
+  const q = Number($('#qty').value);
+  if (!Number.isInteger(q) || q < 0 || q > 99){ toast('名額要填 0～99 的整數', true); return; }
+  const scope = document.querySelector('input[name=scope]:checked').value;
+  await submit({ dates: targetDates(), role: state.edit.role, store: scope === 'all' ? '' : state.store, quota: q, note: $('#note').value.trim() });
+}
+async function reset(){
+  const c = state.data.grid[state.store][state.edit.role][state.edit.i];
+  await submit({ dates: targetDates(), role: c.override.role, store: c.override.store, quota: null });
+}
+async function submit(payload){
+  if (state.busy) return;
+  setBusy(true);
+  try { const d = await api('adminSet', payload); render(d); closePanel(); toast(d.message || '已儲存'); }
+  catch(e){ handleError(e); }
+  finally { setBusy(false); }
+}
+
+/* ===== 小工具 ===== */
+function el(tag, cls, text){ const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+let toastTimer;
+function toast(msg, err){ const t = $('#toast'); t.textContent = msg; t.className = 'show' + (err ? ' err' : ''); clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.className = err ? 'err' : ''; }, err ? 4000 : 2500); }
+function setBusy(b){ state.busy = b; $('#busy').classList.toggle('hidden', !b); }
+function shiftMonth(n){
+  const [y, m] = state.month.split('-').map(Number);
+  const t = new Date(y, m - 1 + n, 1);
+  load(t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0'));
+}
+
+$('#prev').onclick = () => shiftMonth(-1);
+$('#next').onclick = () => shiftMonth(1);
+$('#minus').onclick = () => { $('#qty').value = Math.max(0, (Number($('#qty').value) || 0) - 1); updateZeroHint(); };
+$('#plus').onclick = () => { $('#qty').value = Math.min(99, (Number($('#qty').value) || 0) + 1); updateZeroHint(); };
+$('#qty').oninput = updateZeroHint;
+$('#saveBtn').onclick = save;
+$('#resetBtn').onclick = reset;
+$('#cancelBtn').onclick = closePanel;
+$('#backdrop').onclick = closePanel;
+$('#logoutBtn').onclick = () => logout('');
+</script>
+<script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoad()"></script>
+</body>
+</html>
