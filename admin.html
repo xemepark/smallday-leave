@@ -185,7 +185,7 @@
   #backdrop.show{opacity:1;pointer-events:auto}
   .modal{position:fixed;left:50%;bottom:0;transform:translate(-50%,105%);width:min(500px,100%);background:var(--card);
     border-radius:18px 18px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));transition:transform .22s;z-index:11;
-    box-shadow:0 -6px 24px rgba(0,0,0,.1);max-height:92vh;overflow:auto}
+    box-shadow:0 -6px 24px rgba(0,0,0,.1);max-height:92vh;max-height:calc(100dvh - 24px);overflow:auto}
   .modal.show{transform:translate(-50%,0)}
   @media(min-width:700px){
     .modal{top:50%;bottom:auto;border-radius:18px;transform:translate(-50%,-46%);opacity:0;visibility:hidden;transition:transform .2s,opacity .2s,visibility .2s}
@@ -427,7 +427,7 @@
 
 <div id="rulesPanel" class="modal" role="dialog" aria-modal="true">
   <h2>職務與每日名額</h2>
-  <div class="meta">勾選的職務每天休假有人數限制；沒勾的職務每天不限人數（每人每月自排、週末、連休上限照算）。特定日期要例外，到「名額設定」點那一格改。</div>
+  <div class="meta">勾選的職務每天休假有人數限制；沒勾的職務每天不限人數（每人每月自排、週末、連休上限照算）。特定日期要例外，到「名額設定」點那一格改。<br><a href="#quota" style="color:var(--accent);font-weight:700">👉 設定某一天某職務只能休幾人（去名額設定）</a></div>
   <div id="rList"></div>
   <div class="btns" style="margin-top:12px">
     <button class="btn ghost" id="rCancel">取消</button>
@@ -443,7 +443,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '2.6.3';
+const VERSION = '2.6.4';
 const WEEK = '日一二三四五六';
 const $ = s => document.querySelector(s);
 const state = { token: null, me: null, data: null, roster: null, view: 'quota', store: null, rStore: '全部', month: null, edit: null, leave: null, busy: false };
