@@ -156,6 +156,10 @@
   .exl .ex{display:flex;align-items:center;gap:4px;background:var(--bg);border-radius:8px;padding:2px 4px 2px 8px;color:var(--ink)}
   .exl .ex select{padding:3px;font-size:12px}
   .exl .ex .x{border:0;background:none;color:var(--accent);cursor:pointer;font-size:14px}
+  .srole{display:grid;grid-template-columns:auto 1fr auto auto;gap:8px;align-items:center;padding:6px 0;border-top:1px dashed var(--line);font-size:13px}
+  .srole label{display:flex;gap:6px;align-items:center;font-weight:700;cursor:pointer}
+  .srole .mini span{font-size:15px}
+  .srole small{color:var(--sub);white-space:nowrap}
   .exl .add{border:0;background:none;color:var(--sub);text-decoration:underline;cursor:pointer;font-size:12px;padding:0}
   footer{text-align:center;color:var(--sub);font-size:11px;margin-top:16px}
 
@@ -316,10 +320,16 @@
   <div class="field">
     <label>每人每月的限制</label>
     <div class="grid2" style="grid-template-columns:1fr 1fr 1fr">
-      <div><input class="text" type="number" min="0" max="31" id="sLeave"><div class="subnote">自排天數</div></div>
+      <div><input class="text" type="number" min="0" max="31" id="sLeave"><div class="subnote">每月休假天數</div></div>
       <div><input class="text" type="number" min="0" max="10" id="sWeekend"><div class="subnote">週末最多自選</div></div>
       <div><input class="text" type="number" min="1" max="31" id="sConsec"><div class="subnote">最多連休</div></div>
     </div>
+    <div class="subnote">不管怎麼排，系統都會擋下會讓同仁連續上班 7 天以上的排法。</div>
+  </div>
+
+  <div class="field">
+    <label>各職務自排／公排天數（沒勾的職務＝每月休假天數全部都可以自排）</label>
+    <div id="sRoles"></div>
   </div>
 
   <div class="btns">
@@ -407,7 +417,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '2.2.0';
+const VERSION = '2.3.0';
 const WEEK = '日一二三四五六';
 const $ = s => document.querySelector(s);
 const state = { token: null, me: null, data: null, roster: null, view: 'quota', store: null, rStore: '全部', month: null, edit: null, leave: null, busy: false };
@@ -561,8 +571,9 @@ function renderRoster(r){
       if (!p.inactive) b.onclick = () => openLeave(p, day);
       td.appendChild(b); tr.appendChild(td);
     });
-    const s1 = el('td', 'sum', cLeave + ' / ' + r.maxLeave); if (cLeave > r.maxLeave) s1.style.color = 'var(--accent)';
-    tr.appendChild(s1); tr.appendChild(el('td', 'sum', String(cMgr))); tr.appendChild(el('td', 'sum', String(cAll)));
+    const mxS = p.maxSelf != null ? p.maxSelf : r.maxLeave;
+    const s1 = el('td', 'sum', cLeave + ' / ' + mxS); if (cLeave > mxS) s1.style.color = 'var(--accent)';
+    tr.appendChild(s1); tr.appendChild(el('td', 'sum', p.maxMgr ? cMgr + ' / ' + p.maxMgr : String(cMgr))); tr.appendChild(el('td', 'sum', String(cAll)));
     tb.appendChild(tr);
   });
   if (!people.length){ const tr = el('tr'); const td = el('td', '', '這間門市沒有人員'); td.colSpan = r.days.length + 4; td.style.padding = '16px'; tr.appendChild(td); tb.appendChild(tr); }
@@ -845,7 +856,8 @@ function openPerson(key){
   const wk = days.filter(d => mine[d.date] === T_SELF && (d.dow === 0 || d.dow === 6)).length;
   const hol = r.days.filter(d => d.holiday).length;
   const st = $('#ppStats'); st.textContent = '';
-  [[leave + ' / ' + r.maxLeave, '自排', leave > r.maxLeave], [String(wk), '週末自選', false], [String(cnt(T_MGR)), '公排', false], [String(days.length + hol), '合計放假' , false]]
+  const mxS = p.maxSelf != null ? p.maxSelf : r.maxLeave, mxM = p.maxMgr || 0, mg = cnt(T_MGR);
+  [[leave + ' / ' + mxS, '自排', leave > mxS], [mxM ? mg + ' / ' + mxM : String(mg), '公排', mxM && mg > mxM], [String(wk), '週末自選', false], [String(days.length + hol), '合計放假' , false]]
     .forEach(([v, l, over]) => { const d = el('div', over ? 'over' : ''); d.appendChild(el('b', '', v)); d.appendChild(el('small', '', l)); st.appendChild(d); });
   const ul = $('#ppList'); ul.textContent = '';
   r.days.filter(d => mine[d.date] || d.holiday).forEach(d => {
@@ -860,6 +872,7 @@ function openPerson(key){
     li.appendChild(w); ul.appendChild(li);
   });
   if (!ul.children.length) ul.appendChild(el('li', 'none', '這個月還沒有排休'));
+  if (mxM && mg < mxM){ const li = el('li'); li.appendChild(el('span', 'none', '👉 還要幫他排 ' + (mxM - mg) + ' 天公排')); ul.appendChild(li); }
   // 連休、連續上班提醒
   const offSet = {}; r.days.forEach(d => { if (mine[d.date] || d.holiday) offSet[d.date] = true; });
   let run = 0, maxWork = 0, work = 0;
@@ -1012,7 +1025,10 @@ function openSettings(){
   cnt.value = Math.min(6, c.monthCount || 1);
   $('#sOpen').value = toLocalInput(c.openAt);
   $('#sClose').value = toLocalInput(c.closeAt);
-  $('#sLeave').value = c.maxLeave; $('#sWeekend').value = c.maxWeekend; $('#sConsec').value = c.maxConsecutive;
+  $('#sLeave').value = c.monthOff; $('#sWeekend').value = c.maxWeekend; $('#sConsec').value = c.maxConsecutive;
+  state.rl = {};
+  (c.roles || []).forEach(r => { const x = (c.roleLeave || {})[r]; state.rl[r] = { on: !!x, self: x ? x.self : 5, mgr: x ? x.mgr : 3 }; });
+  renderRoleLeave();
   updatePreview();
   $('#backdrop').classList.add('show'); $('#setPanel').classList.add('show');
 }
@@ -1026,12 +1042,31 @@ function updatePreview(){
   if (c.customList){ p.textContent += '　※ 試算表原本手動填了 ' + c.customList + '，儲存後會改用這裡的設定'; p.classList.add('warnbg'); }
   else p.classList.remove('warnbg');
 }
+function renderRoleLeave(){
+  const box = $('#sRoles'); box.textContent = '';
+  const off = Number($('#sLeave').value) || 0;
+  Object.keys(state.rl).forEach(role => {
+    const x = state.rl[role], row = el('div', 'srole');
+    const lab = el('label'); const cb = el('input'); cb.type = 'checkbox'; cb.checked = x.on;
+    cb.onchange = () => { x.on = cb.checked; renderRoleLeave(); };
+    lab.append(cb, role); row.appendChild(lab);
+    if (x.on){
+      const a = el('div', 'mini'); a.append(el('small', '', '自排')); a.appendChild(miniStepper(() => x.self, v => { x.self = v; renderTotal(); }));
+      const b = el('div', 'mini'); b.append(el('small', '', '公排')); b.appendChild(miniStepper(() => x.mgr, v => { x.mgr = v; renderTotal(); }));
+      const tot = el('small', 'tot'); row.append(tot, a, b);
+      function renderTotal(){ tot.textContent = '共 ' + (x.self + x.mgr) + ' 天'; }
+      renderTotal();
+    } else { row.append(el('small', '', off + ' 天都可以自排'), el('span'), el('span')); }
+    box.appendChild(row);
+  });
+}
 async function saveSettings(){
   if (state.busy) return;
   const settings = {
     startMonth: $('#sStart').value, monthCount: Number($('#sCount').value),
     openAt: fromLocalInput($('#sOpen').value), closeAt: fromLocalInput($('#sClose').value),
-    maxLeave: Number($('#sLeave').value), maxWeekend: Number($('#sWeekend').value), maxConsecutive: Number($('#sConsec').value)
+    monthOff: Number($('#sLeave').value), maxWeekend: Number($('#sWeekend').value), maxConsecutive: Number($('#sConsec').value),
+    roleLeave: Object.fromEntries(Object.keys(state.rl).filter(r => state.rl[r].on).map(r => [r, { self: state.rl[r].self, mgr: state.rl[r].mgr }]))
   };
   setBusy(true);
   try { const d = await api('adminSaveSettings', { settings }); render(d); closePanel(); toast(d.message || '已儲存'); }
@@ -1091,6 +1126,7 @@ $('#aClose').onclick = closePanel;
 $('#sStart').onchange = updatePreview;
 $('#sCount').onchange = updatePreview;
 $('#sSave').onclick = saveSettings;
+$('#sLeave').oninput = () => { if (state.rl) renderRoleLeave(); };
 $('#sCancel').onclick = closePanel;
 $('#dCancel').onclick = closePanel;
 $('#rCancel').onclick = closePanel;
