@@ -175,7 +175,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '2.0.0';
+const VERSION = '2.1.0';
 const POLL_MS = 15000;
 const WEEK = '日一二三四五六';
 
@@ -342,7 +342,7 @@ function render(d){
     unset:  '主管還沒設定劃假時間'
   }[d.window.status];
 
-  $('#cLeaveLabel').textContent = Number(m) + ' 月自排';
+  $('#cLeaveLabel').textContent = Number(m) + ' 月自排' + (d.limits.maxMgr ? '（另有公排 ' + d.limits.maxMgr + ' 天由主管排）' : '');
   $('#cLeave').textContent = d.counts.leave;
   $('#cLeaveMax').textContent = ' / ' + d.limits.maxLeave + ' 天';
   $('#cWeekendBox').classList.toggle('hidden', !d.limits.weekendCapped);
