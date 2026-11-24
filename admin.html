@@ -103,6 +103,19 @@
   td.full .u{color:var(--accent);font-weight:700}
   td.na .q{color:var(--line)}
   .hint{font-size:12px;color:var(--sub);margin-top:8px}
+  thead th.dayhd{cursor:pointer}
+  thead th.dayhd:hover{background:var(--bg)}
+  thead th .mk{display:block;margin:2px auto 0;width:max-content;font-size:10px;font-weight:700;border-radius:4px;padding:0 4px;line-height:1.5}
+  thead th .mk.hol{background:#4f8a5b;color:#fff}
+  thead th .mk.blk{background:var(--accent);color:#fff}
+  td.hol{background:#eaf3ec}
+  td.hol .q{color:#4f8a5b;font-size:14px}
+  .lv-公休{background:#eaf3ec;color:#4f8a5b;border:1px solid #4f8a5b}
+  .dmode{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+  .dmode label{display:flex;gap:8px;align-items:flex-start;background:var(--bg);border-radius:10px;padding:10px;cursor:pointer;border:1.5px solid transparent}
+  .dmode label.on{border-color:var(--ink)}
+  .dmode input{margin-top:3px}
+  .dmode small{display:block;color:var(--sub)}
   footer{text-align:center;color:var(--sub);font-size:11px;margin-top:16px}
 
   /* 編輯面板 */
@@ -175,21 +188,23 @@
     <div class="legend" id="quotaLegend">
       <span><i style="background:var(--ov-bg);border-color:var(--ov)"></i>特別設定（日期覆寫）</span>
       <span><i style="background:var(--full-bg)"></i>0 = 禁休</span>
+      <span><i style="background:#eaf3ec;border-color:#4f8a5b"></i>公 = 全公司公休</span>
       <span>數字＝可休人數，下面小字＝已排人數</span>
     </div>
 
     <div id="quotaView">
       <div class="tablewrap"><table id="grid"></table></div>
-      <div class="hint">點任一格就能改那天、那個職位的名額。沒有特別設定的格子，用的是「名額規則」的預設值。</div>
+      <div class="hint">點任一格就能改那天、那個職位的名額。<b>點上面的日期</b>可以把那天設成「全公司禁休」或「全公司公休」（例如過年）。沒有特別設定的格子，用的是「名額規則」的預設值。</div>
     </div>
     <div id="rosterView" class="hidden">
       <div class="legend">
         <span><span class="lv lv-休假">休</span> 休假（員工自己劃）</span>
         <span><span class="lv lv-可休">可</span> 可休（主管排）</span>
         <span><span class="lv lv-特休">特</span> 特休</span>
+        <span><span class="lv lv-公休">公</span> 全公司公休</span>
       </div>
       <div class="tablewrap"><table id="roster"></table></div>
-      <div class="hint">點任一格就能幫同仁排休、改類型或取消。超過名額或個人上限時會先提醒，確認後才會排。黃色名字＝還沒填 Gmail，不能自己登入劃假。</div>
+      <div class="hint">點任一格就能幫同仁排休、改類型或取消；點上面的日期可以設定全公司禁休或公休。超過名額或個人上限時會先提醒，確認後才會排。黃色名字＝還沒填 Gmail，不能自己登入劃假。</div>
     </div>
     <footer id="foot"></footer>
   </section>
@@ -289,6 +304,28 @@
   <div class="btns"><button class="btn ghost" id="lClose">關閉</button></div>
 </div>
 
+<div id="dayPanel" class="modal" role="dialog" aria-modal="true">
+  <h2 id="dTitle"></h2>
+  <div class="meta">整天的設定，套用到全公司所有門市、所有職位</div>
+  <div class="dmode" id="dModes">
+    <label><input type="radio" name="dmode" value="normal"><span><b>正常</b><small>照「名額規則」和各職位的名額設定</small></span></label>
+    <label><input type="radio" name="dmode" value="block"><span><b>全公司禁休</b><small>所有人都不能劃假（例如盤點、大檔期）。已經排的假會保留，請自己到總表確認</small></span></label>
+    <label><input type="radio" name="dmode" value="holiday"><span><b>全公司公休</b><small>所有人統一放假（例如過年），不用劃、不佔每月指定假。這天原本排的假會自動刪掉</small></span></label>
+  </div>
+  <div class="field" id="dNoteF">
+    <label for="dNote" id="dNoteL">名稱</label>
+    <input class="text" id="dNote" maxlength="30">
+  </div>
+  <div class="field">
+    <label for="dEnd">連續好幾天的話，選到哪一天（最多 31 天）</label>
+    <input class="text" type="date" id="dEnd">
+  </div>
+  <div class="btns">
+    <button class="btn ghost" id="dCancel">取消</button>
+    <button class="btn primary" id="dSave">儲存</button>
+  </div>
+</div>
+
 <div id="toast"></div>
 <div id="busy" class="hidden"><div class="spin"></div></div>
 
@@ -297,7 +334,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '1.5.0';
+const VERSION = '1.6.0';
 const WEEK = '日一二三四五六';
 const $ = s => document.querySelector(s);
 const state = { token: null, me: null, data: null, roster: null, view: 'quota', store: null, rStore: '全部', month: null, edit: null, leave: null, busy: false };
@@ -415,10 +452,7 @@ function renderRoster(r){
   const t = $('#roster'); t.textContent = '';
   const thead = el('thead'), hr = el('tr');
   hr.appendChild(el('th', 'rowhead', '同仁'));
-  r.days.forEach(day => {
-    const th = el('th', day.dow === 6 ? 'sat' : day.dow === 0 ? 'sun' : '', String(Number(day.date.slice(8))));
-    th.appendChild(el('small', '', WEEK[day.dow])); hr.appendChild(th);
-  });
+  r.days.forEach(day => hr.appendChild(dayHead(day)));
   hr.appendChild(el('th', '', '休假')); hr.appendChild(el('th', '', '可休')); hr.appendChild(el('th', '', '合計'));
   thead.appendChild(hr); t.appendChild(thead);
   const tb = el('tbody'); let lastRole = null;
@@ -437,8 +471,12 @@ function renderRoster(r){
     let cLeave = 0, cMgr = 0, cAll = 0;
     r.days.forEach((day, i) => {
       const type = mine[day.date];
-      const td = el('td', 'c' + (day.dow === 0 || day.dow === 6 ? ' we' : ''));
+      const td = el('td', 'c' + (day.dow === 0 || day.dow === 6 ? ' we' : '') + (day.holiday ? ' hol' : ''));
       const b = el('button');
+      if (day.holiday){
+        b.appendChild(el('span', 'lv lv-公休', '公')); b.title = day.date + ' 全公司公休（' + day.holiday + '）';
+        b.onclick = () => openDay(day); td.appendChild(b); tr.appendChild(td); return;
+      }
       if (type){ b.appendChild(el('span', lvClass(type), lvShort(type))); perDay[i]++; cAll++; if (type === '休假') cLeave++; if (type === '可休') cMgr++; }
       b.title = p.name + ' ' + day.date + (type ? ' ' + type : '');
       if (!p.inactive) b.onclick = () => openLeave(p, day);
@@ -524,11 +562,7 @@ function render(d){
   const t = $('#grid'); t.textContent = '';
   const thead = el('thead'), hr = el('tr');
   hr.appendChild(el('th', 'rowhead', state.store));
-  d.days.forEach(day => {
-    const th = el('th', day.dow === 6 ? 'sat' : day.dow === 0 ? 'sun' : '', String(Number(day.date.slice(8))));
-    th.appendChild(el('small', '', WEEK[day.dow]));
-    hr.appendChild(th);
-  });
+  d.days.forEach(day => hr.appendChild(dayHead(day)));
   thead.appendChild(hr); t.appendChild(thead);
 
   const tb = el('tbody');
@@ -539,6 +573,12 @@ function render(d){
       const day = d.days[i];
       const cls = [];
       if (day.dow === 0 || day.dow === 6) cls.push('we');
+      if (day.holiday){
+        const td = el('td', cls.concat('hol').join(' ')); const b = el('button');
+        b.title = day.date + ' 全公司公休（' + day.holiday + '）';
+        b.appendChild(el('span', 'q', '公')); b.appendChild(el('span', 'u', ''));
+        b.onclick = () => openDay(day); td.appendChild(b); tr.appendChild(td); return;
+      }
       if (c.override) cls.push('ov');
       if (c.quota === null) cls.push('na');
       else if (c.quota <= 0) cls.push('zero');
@@ -599,7 +639,7 @@ function openPanel(role, i){
 function closePanel(silent){
   state.edit = null; state.leave = null;
   $('#backdrop').classList.remove('show');
-  ['#panel', '#setPanel', '#adminPanel', '#leavePanel'].forEach(id => $(id).classList.remove('show'));
+  ['#panel', '#setPanel', '#adminPanel', '#leavePanel', '#dayPanel'].forEach(id => $(id).classList.remove('show'));
   // 關掉「系統設定」「管理員」面板時，網址和選單回到目前的畫面
   const h = location.hash.slice(1);
   if (silent !== true && (h === 'settings' || h === 'admins')){
@@ -607,6 +647,53 @@ function closePanel(silent){
     history.replaceState(null, '', '#' + v);
     renderMenu(v);
   }
+}
+
+/* ===== 整天設定：全公司禁休／公休 ===== */
+function dayHead(day){
+  const th = el('th', 'dayhd' + (day.dow === 6 ? ' sat' : day.dow === 0 ? ' sun' : ''), String(Number(day.date.slice(8))));
+  th.appendChild(el('small', '', WEEK[day.dow]));
+  if (day.holiday) th.appendChild(el('span', 'mk hol', '公休'));
+  else if (day.block) th.appendChild(el('span', 'mk blk', '禁休'));
+  th.title = day.holiday ? '全公司公休：' + day.holiday : day.block ? '全公司禁休：' + day.block : '點這裡設定全公司禁休或公休';
+  th.onclick = () => openDay(day);
+  return th;
+}
+function openDay(day){
+  state.day = day;
+  $('#dTitle').textContent = Number(day.date.slice(5, 7)) + '/' + Number(day.date.slice(8)) + '（' + WEEK[day.dow] + '）整天設定';
+  const mode = day.holiday ? 'holiday' : day.block ? 'block' : 'normal';
+  document.querySelector('input[name=dmode][value=' + mode + ']').checked = true;
+  $('#dNote').value = day.holiday || (day.block && day.block !== '全公司禁休' ? day.block : '');
+  $('#dEnd').value = day.date; $('#dEnd').min = day.date;
+  syncDayMode();
+  $('#backdrop').classList.add('show'); $('#dayPanel').classList.add('show');
+}
+function syncDayMode(){
+  const m = document.querySelector('input[name=dmode]:checked').value;
+  document.querySelectorAll('#dModes label').forEach(l => l.classList.toggle('on', l.querySelector('input').checked));
+  $('#dNoteF').classList.toggle('hidden', m === 'normal');
+  $('#dNoteL').textContent = m === 'holiday' ? '名稱（員工看得到，例如「過年」「尾牙」）' : '原因（員工看得到，例如「盤點」「大檔期」）';
+}
+function dayRange(start, end){
+  const out = []; let d = new Date(start + 'T00:00:00'); const e = new Date((end || start) + 'T00:00:00');
+  while (d <= e && out.length < 32){ out.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')); d.setDate(d.getDate() + 1); }
+  return out;
+}
+async function saveDay(){
+  if (state.busy) return;
+  const mode = document.querySelector('input[name=dmode]:checked').value;
+  const end = $('#dEnd').value || state.day.date;
+  if (end < state.day.date){ toast('結束日期不能比開始早', true); return; }
+  const dates = dayRange(state.day.date, end);
+  if (dates.length > 31){ toast('一次最多設定 31 天', true); return; }
+  setBusy(true);
+  try {
+    const d = await api('adminSetDay', { dates, mode, note: $('#dNote').value.trim(), view: state.view });
+    if (state.view === 'roster') renderRoster(d); else render(d);
+    closePanel(); toast(d.message || '已儲存');
+  } catch(e){ handleError(e); }
+  finally { setBusy(false); }
 }
 
 /* ===== 管理員（只有系統擁有者） ===== */
@@ -744,6 +831,9 @@ $('#sStart').onchange = updatePreview;
 $('#sCount').onchange = updatePreview;
 $('#sSave').onclick = saveSettings;
 $('#sCancel').onclick = closePanel;
+$('#dCancel').onclick = closePanel;
+$('#dSave').onclick = saveDay;
+document.querySelectorAll('input[name=dmode]').forEach(r => r.onchange = syncDayMode);
 </script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoad()"></script>
 </body>
