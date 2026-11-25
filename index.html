@@ -203,7 +203,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '2.3.1';
+const VERSION = '2.3.2';
 const POLL_MS = 15000;
 const WEEK = '日一二三四五六';
 
@@ -253,6 +253,7 @@ async function start(){
     setBusy(false);
     await load(true);
     renderMenu('leave');
+    checkDispatch('leave');
   } catch(e){ handleError(e); }
   finally { setBusy(false); }
 }
@@ -265,8 +266,18 @@ const NAV = [
   { id: 'rules',    label: '職務名額', href: 'admin.html#rules',    show: me => me.admin },
   { id: 'settings', label: '系統設定', href: 'admin.html#settings', show: me => me.admin },
   { id: 'admins',   label: '管理員',   href: 'admin.html#admins',   show: me => me.owner },
-  { id: 'dispatch', label: '派工',     href: 'dispatch.html',       show: me => me.admin }
+  { id: 'dispatch', label: '派工',     href: 'dispatch.html',       show: me => me.admin },
+  { id: 'schedule', label: '班表',     href: 'dispatch.html',       show: me => !me.admin && !!me.dispatchRole }
 ];
+// 不是管理員的人，問派工系統有沒有開放看班表；有的話選單多一個「班表」
+const DISPATCH_API = 'https://script.google.com/macros/s/AKfycbwabey942q1fUpPhaeaFng1AD1jsBWvddG8vOhEJ1AhImsW9vnN8wOVJBk7T5W3zVoR_g/exec';
+async function checkDispatch(active){
+  if (!state.me || state.me.admin) return;
+  try {
+    const r = await (await fetch(DISPATCH_API, { method:'POST', body: JSON.stringify({ action:'ping', idToken: state.token }) })).json();
+    if (r.ok && r.role && state.me) { state.me.dispatchRole = r.role; renderMenu(active); }
+  } catch(e){}
+}
 function renderMenu(active){
   const m = $('#menu'); if (!m || !state.me) return;
   const items = NAV.filter(n => n.show(state.me));
