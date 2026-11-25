@@ -443,7 +443,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '2.6.5';
+const VERSION = '2.6.6';
 const WEEK = '日一二三四五六';
 const $ = s => document.querySelector(s);
 const state = { token: null, me: null, data: null, roster: null, view: 'quota', store: null, rStore: '全部', month: null, edit: null, leave: null, busy: false };
@@ -502,7 +502,8 @@ const NAV = [
   { id: 'quota',    label: '名額設定', href: 'admin.html#quota',    show: me => me.admin },
   { id: 'rules',    label: '職務名額', href: 'admin.html#rules',    show: me => me.admin },
   { id: 'settings', label: '系統設定', href: 'admin.html#settings', show: me => me.admin },
-  { id: 'admins',   label: '管理員',   href: 'admin.html#admins',   show: me => me.owner }
+  { id: 'admins',   label: '管理員',   href: 'admin.html#admins',   show: me => me.owner },
+  { id: 'dispatch', label: '派工',     href: 'dispatch.html',       show: me => me.admin }
 ];
 function renderMenu(active){
   const m = $('#menu'); if (!m || !state.me) return;
