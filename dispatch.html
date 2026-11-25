@@ -133,7 +133,7 @@ button.lnk{border:0;background:none;color:var(--pri);padding:6px 2px;white-space
     <div id="out"></div>
   </section>
   <section id="v-data" class="view" hidden>
-    <div class="bar"><button id="reloadAll" class="pri">重新載入資料</button><span class="sp"></span><a class="lk" id="ctrLink" target="_blank" rel="noopener">開啟「月中注意事項」試算表 ›</a></div>
+    <div class="bar"><button id="reloadAll" class="pri">重新載入資料</button><button id="impNov">匯入 11 月班表</button><span class="sp"></span><a class="lk" id="ctrLink" target="_blank" rel="noopener">開啟「月中注意事項」試算表 ›</a></div>
     <p class="hint">人員、職務和休假來自劃假系統；地點來自「月中注意事項」試算表。要修改請到原本的系統，改完按「重新載入資料」。</p>
     <div class="cols">
       <div><h3 class="dh">地點</h3><div id="dCenters" class="dlist"></div></div>
@@ -166,7 +166,7 @@ const CONFIG={
   CLIENT_ID:'780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com',
   CENTERS_URL:'https://docs.google.com/spreadsheets/d/194jgZr7PcV0jcKCvWoUavZhWVGzOgTJK5Lkqr963XAQ/edit'
 };
-const VERSION='1.0.0';
+const VERSION='1.0.1';
 const WD='日一二三四五六';
 const pad=n=>String(n).padStart(2,'0');
 const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
@@ -683,6 +683,29 @@ $('reloadAll').onclick=async()=>{
   try{LOADED.clear();STAFF_MAP={};S.staff=[];S.leave={};const c=await api('centers');setCenters(c.centers);await ensureMonths(monthsAround(ymd(new Date(cy,cm,15))));refresh();renderData();toast('已重新載入')}
   catch(e){handleErr(e)}finally{busy(false)}
 };
+/* ---------- 一次性匯入：2026/11 紙本班表 ---------- */
+$('impNov').onclick=()=>arm($('impNov'),'再按一次確認匯入','匯入 11 月班表',async()=>{
+  if(dirtyDays().length){toast('還有修改正在儲存，請稍候再試',true);return}
+  busy(true);
+  try{
+    const r=await fetch('import-2026-11.json?v='+Date.now());if(!r.ok)throw new Error('讀不到匯入檔');
+    const data=await r.json();
+    await ensureMonths([...new Set(Object.keys(data).map(mKey))]);
+    const skip=new Set(Object.keys(data).filter(d=>(S.days[d]||[]).length));
+    const take=Object.keys(data).filter(d=>!skip.has(d));
+    if(!take.length){toast('這些日期都已經有資料，沒有匯入任何東西',true);return}
+    const where={};for(const d in data)for(const e of data[d])where[e.id]=d;
+    const full=clone(S.days);let n=0;
+    for(const d of take){
+      S.days[d]=data[d].map(e=>{e=clone(e);
+        if(e.type==='pick'&&e.link&&skip.has(where[e.link])){e.link='';e.title=e.title||'挑片'}
+        if(e.type==='shoot'&&e.pickMode!=='none'){const lk=Object.keys(data).some(k=>!skip.has(k)&&data[k].some(x=>x.link===e.id));if(!lk){e.pickMode='none';e.pickDate=''}}
+        n++;return e});
+    }
+    pushUndo({full,label:'匯入11月班表'});lastLabel='匯入11月班表';save();refresh();
+    toast('已匯入 '+take.length+' 天、'+n+' 筆'+(skip.size?'（'+skip.size+' 天已有資料，略過）':''));
+  }catch(e){handleErr(e)}finally{busy(false)}
+});
 $('logout').onclick=()=>{if(dirtyDays().length){toast('還有修改正在儲存，請稍候再登出',true);return}logout('')};
 const arm=(b,txt,orig,fn)=>{if(!b.classList.contains('armed')){b.classList.add('armed');b.textContent=txt;setTimeout(()=>{b.classList.remove('armed');b.textContent=orig},4000);return}b.classList.remove('armed');b.textContent=orig;fn()};
 
