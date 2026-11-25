@@ -133,8 +133,8 @@ button.lnk{border:0;background:none;color:var(--pri);padding:6px 2px;white-space
     <div id="out"></div>
   </section>
   <section id="v-data" class="view" hidden>
-    <div class="bar"><button id="reloadAll" class="pri">重新載入資料</button><button id="impNov">匯入 11 月班表</button><span class="sp"></span><a class="lk" id="ctrLink" target="_blank" rel="noopener">開啟「月中注意事項」試算表 ›</a></div>
-    <p class="hint">人員、職務和休假來自劃假系統；地點來自「月中注意事項」試算表。要修改請到原本的系統，改完按「重新載入資料」。</p>
+    <div class="bar"><button id="reloadAll" class="pri">重新載入資料</button><button id="impNov">匯入 11 月班表</button><span class="sp"></span><a class="lk" id="ctrLink" target="_blank" rel="noopener">開啟「小日子月中資料」試算表 ›</a></div>
+    <p class="hint">人員、職務和休假來自劃假系統；地點來自「小日子月中資料」試算表（沒有地址的不列入）。要修改請到原本的系統，改完按「重新載入資料」。</p>
     <div class="cols">
       <div><h3 class="dh">地點</h3><div id="dCenters" class="dlist"></div></div>
       <div><h3 class="dh">人員（依職務）</h3><div id="dStaff" class="dlist"></div></div>
@@ -164,9 +164,9 @@ const CONFIG={
   DISPATCH_API:'https://script.google.com/macros/s/AKfycbwabey942q1fUpPhaeaFng1AD1jsBWvddG8vOhEJ1AhImsW9vnN8wOVJBk7T5W3zVoR_g/exec',
   LEAVE_API:'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID:'780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com',
-  CENTERS_URL:'https://docs.google.com/spreadsheets/d/194jgZr7PcV0jcKCvWoUavZhWVGzOgTJK5Lkqr963XAQ/edit'
+  CENTERS_URL:'https://docs.google.com/spreadsheets/d/1WlFSbmEnhAK2oJUXt3w_SHfehW-aCqxwask-sJPT0O0/edit'
 };
-const VERSION='1.0.1';
+const VERSION='1.1.0';
 const WD='日一二三四五六';
 const pad=n=>String(n).padStart(2,'0');
 const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
@@ -238,8 +238,10 @@ const mKey=d=>d.slice(0,7);
 const monthsAround=d=>{const x=pd(d.slice(0,8)+'01');return[-1,0,1].map(i=>{const y=new Date(x.getFullYear(),x.getMonth()+i,1);return ymd(y).slice(0,7)})};
 const monthRange=m=>{const[y,mm]=m.split('-').map(Number);return[m+'-01',ymd(new Date(y,mm,0))]};
 function setCenters(list){
-  const ctr=[],std=[];
+  const ctr=[],std=[];S.addr={};
   for(const c of list){
+    if('addr' in c){ // 新格式：小日子月中資料（全名／簡稱／區域／地址）
+      const n=c.short||c.full;if(!n||!c.addr)continue;S.addr[n]=c.addr;(c.studio?std:ctr).push(n);continue}
     let n=c.full.split(/[（(]/)[0].replace(/產後護理之家.*$/,'').trim()||c.full;
     if(/^到府/.test(n))continue;
     if(/攝影棚$/.test(n)){std.push(n.replace(/攝影棚$/,'棚'));continue}
@@ -669,7 +671,7 @@ $('copyOut').onclick=()=>{const txt=$('oTitle').textContent+'\n'+weekRows().map(
 /* ---------- 資料設定（唯讀） ---------- */
 async function renderData(){
   $('ctrLink').href=CONFIG.CENTERS_URL;
-  $('dCenters').innerHTML='<div class="g">月子中心（'+S.centers.length+'）</div>'+S.centers.map(c=>'<div class="it">'+esc(c)+'</div>').join('')+'<div class="g">攝影棚／門市（'+S.studios.length+'）</div>'+S.studios.map(c=>'<div class="it">'+esc(c)+'</div>').join('');
+  $('dCenters').innerHTML='<div class="g">月子中心（'+S.centers.length+'）</div>'+S.centers.map(c=>'<div class="it">'+esc(c)+(S.addr&&S.addr[c]?'<br><small>'+esc(S.addr[c])+'</small>':'')+'</div>').join('')+'<div class="g">攝影棚（'+S.studios.length+'）</div>'+S.studios.map(c=>'<div class="it">'+esc(c)+(S.addr&&S.addr[c]?'<br><small>'+esc(S.addr[c])+'</small>':'')+'</div>').join('');
   const by={};for(const p of S.staff)(by[p.role]||(by[p.role]=[])).push(p);
   const order=[...ROLE_ORDER,...Object.keys(by).filter(r=>!ROLE_ORDER.includes(r))];
   $('dStaff').innerHTML=order.filter(r=>by[r]).map(r=>'<div class="g">'+esc(r)+'（'+by[r].length+'）</div>'+by[r].map(p=>'<div class="it">'+esc(p.name)+' <small>'+esc(p.store||'')+(p.rawRole&&p.rawRole!==r?'・'+esc(p.rawRole):'')+'</small></div>').join('')).join('')||'<div class="it">還沒有人員資料</div>';
