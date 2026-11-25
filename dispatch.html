@@ -103,7 +103,8 @@ button.lnk{border:0;background:none;color:var(--pri);padding:6px 2px;white-space
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:40;max-width:90vw;font-size:14px}.toast[hidden]{display:none}.toast.err{background:var(--hot);color:#fff}
 .dh{font-size:16px;margin:8px 0}.dlist{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:14px;max-height:520px;overflow:auto}.dlist .g{color:var(--mute);font-size:12px;margin-top:8px}.dlist .it{padding:3px 0;border-bottom:1px dashed var(--line)}.dlist .it:last-child{border:0}.dlist small{color:var(--mute)}
 .loading{padding:30px;text-align:center;color:var(--mute)}
-body.ro #tabs [data-v]:not([data-v=out]),body.ro .oed,body.ro #undoM,body.ro #redoM,body.ro #sync{display:none!important}
+body.ro #pubBtn,body.ro #unpubBtn,body.ro #tabs [data-v]:not([data-v=out]),body.ro .oed,body.ro #undoM,body.ro #redoM,body.ro #sync{display:none!important}
+.pubst{font-size:13px;color:var(--mute);margin-right:4px}.pubst.ok{color:#3c7a4f}.pubst.chg{color:#b7791f;font-weight:600}.nopub{padding:40px 12px;text-align:center;color:var(--mute)}
 </style>
 </head>
 <body>
@@ -130,8 +131,8 @@ body.ro #tabs [data-v]:not([data-v=out]),body.ro .oed,body.ro #undoM,body.ro #re
     <div id="week"></div>
   </section>
   <section id="v-out" class="view" hidden>
-    <div class="bar"><button id="prevO" aria-label="上一週">‹</button><h2 id="oTitle"></h2><button id="nextO" aria-label="下一週">›</button><span class="sp"></span><button id="copyOut" class="pri">複製文字</button></div>
-    <p class="hint" id="oMsg">紅字為業務，綠字(助)為攝影助理，格式比照現行班表。</p>
+    <div class="bar"><button id="prevO" aria-label="上一週">‹</button><h2 id="oTitle"></h2><button id="nextO" aria-label="下一週">›</button><span class="sp"></span><span id="pubSt" class="pubst"></span><button id="unpubBtn" class="lk btnlk" hidden>取消公布</button><button id="pubBtn" class="pri">公布本週</button><button id="copyOut">複製文字</button></div>
+    <p class="hint" id="oMsg">紅字為業務，綠字(助)為攝影助理。排好後按「公布本週」，看班表的同仁才看得到這週；公布後再修改，要按「重新公布」才會更新。</p>
     <div id="out"></div>
   </section>
   <section id="v-data" class="view" hidden>
@@ -169,7 +170,7 @@ const CONFIG={
   CLIENT_ID:'780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com',
   CENTERS_URL:'https://docs.google.com/spreadsheets/d/1WlFSbmEnhAK2oJUXt3w_SHfehW-aCqxwask-sJPT0O0/edit'
 };
-const VERSION='1.3.0';
+const VERSION='1.4.0';
 const WD='日一二三四五六';
 const pad=n=>String(n).padStart(2,'0');
 const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
@@ -235,7 +236,7 @@ async function start(){
     if(me.leaveAdmin===false){$('toLeave').href='index.html';$('toLeave').textContent='劃假系統 ↗';$('toPerm').parentElement.innerHTML='劃假管理員自動可以編輯派工；派工權限由劃假管理員在劃假後台設定。'}// 舊版後端沒有 role，只有管理員能登入
     if(RO()){document.body.classList.add('ro');view='out';curW=mondayOf(ymd(new Date()));
       for(const x of $('tabs').children)x.classList.toggle('on',x.dataset.v==='out');$('tabs').querySelector('[data-v=out]').textContent='班表';
-      for(const v of document.querySelectorAll('.view'))v.hidden=v.id!=='v-out';$('oMsg').textContent='紅字為業務，綠字(助)為攝影助理。'}$('login').hidden=true;$('who').textContent=(me.name||me.email||'已登入');$('logout').hidden=false;
+      for(const v of document.querySelectorAll('.view'))v.hidden=v.id!=='v-out';$('oMsg').textContent='紅字為業務，綠字(助)為攝影助理。只看得到已公布的週。'}$('login').hidden=true;$('who').textContent=(me.name||me.email||'已登入');$('logout').hidden=false;
     const c=await api('centers');setCenters(c.centers);
     await ensureMonths(monthsAround(ymd(new Date(cy,cm,15))));
     refresh();undoBtns();startPoll();
@@ -278,7 +279,7 @@ async function loadMonth(m){
   if(LOADING.has(m))return LOADING.get(m);
   const[from,to]=monthRange(m);
   const p=Promise.all([api('load',{from,to}),RO()?Promise.resolve(null):leaveApi('adminRoster',{month:m}).catch(e=>{if(e.code==='AUTH')throw e;return null})])
-    .then(([d,r])=>{applyDays(d.days,from,to,true);
+    .then(([d,r])=>{applyDays(d.days,from,to,true);mergePub(from,to,d.pub);
       if(r){applyRoster(r);snapLeave(m,from,to,d.leave||{})}
       else for(let k=from;k<=to;k=add(k,1))S.leave[k]=(d.leave||{})[k]||[];
       LOADED.add(m);LOADING.delete(m)})
@@ -291,6 +292,17 @@ function snapLeave(m,from,to,old){
   const a={};for(const k in old)if(old[k]&&old[k].length)a[k]=old[k];
   if(JSON.stringify(o)!==JSON.stringify(a))api('leaveSnap',{month:m,leave:o}).catch(()=>{});
 }
+/* --- 公布狀態（每週） --- */
+const PUB={};
+function mergePub(from,to,pub){
+  const lo=add(from,-6);let ch=false;
+  for(const w of Object.keys(PUB))if(w>=lo&&w<=to&&!(pub&&pub[w])){delete PUB[w];ch=true}
+  for(const w in pub||{}){const o=Object.assign({},PUB[w]||{},pub[w]);if(JSON.stringify(o)!==JSON.stringify(PUB[w]))ch=true;PUB[w]=o}
+  return ch;
+}
+const weekJson=(w,src)=>JSON.stringify([0,1,2,3,4,5,6].map(i=>(src[add(w,i)]||[])));
+function pubState(w){const p=PUB[w];if(!p)return 'none';if(!p.days)return 'pub';return weekJson(w,p.days)===weekJson(w,S.days)?'pub':'chg'}
+const fmtAt=s=>{const t=new Date(s);return isNaN(t)?'':(t.getMonth()+1)+'/'+t.getDate()+' '+pad(t.getHours())+':'+pad(t.getMinutes())};
 const ensureMonths=ms=>Promise.all(ms.filter(m=>!LOADED.has(m)).map(loadMonth));
 /** 畫面需要的月份還沒載入時，先顯示載入中，載完再重畫 */
 function need(d){
@@ -339,7 +351,7 @@ function startPoll(){
       const ms=[...LOADED];let changed=false;
       for(const m of ms){const[from,to]=monthRange(m);const d=await api('load',{from,to});
         for(let k=from;k<=to;k=add(k,1)){const s=d.days[k],v=s?s.version:0;if(v!==(VER[k]||0)){changed=true;break}}
-        applyDays(d.days,from,to,false)}
+        applyDays(d.days,from,to,false);if(mergePub(from,to,d.pub))changed=true}
       if(changed){cleanOrphans();refresh()}
     }catch(e){}
   },30000);
@@ -678,9 +690,34 @@ const weekRows=()=>[0,1,2,3,4,5,6].map(i=>{const d=add(curW,i);return{d,L:groupe
 function renderOut(){
   if(need(curW)||need(add(curW,6))){$('out').innerHTML='<div class="loading">載入中…</div>';return}
   $('oTitle').textContent=pd(curW).getFullYear()+'/'+md(curW)+'–'+md(add(curW,6))+' 班表';
+  pubBar();
+  if(RO()&&!PUB[curW]){$('out').innerHTML='<div class="nopub">這週的班表還沒公布</div>';return}
   $('out').innerHTML='<table class="out"><tbody>'+weekRows().map(r=>'<tr><th><div class="od">'+md(r.d)+'</div><div class="ow'+(/[六日]/.test(wdOf(r.d))?' we':'')+'">週'+wdOf(r.d)+'</div><button class="oed" data-edit="'+r.d+'">編輯</button><button class="oed ref" data-ref="'+r.d+'">複製上週</button></th><td>'+(r.L.map(x=>'<div>'+x.t+'</div>').join('')||'<span class="lv">無</span>')+'<div class="lv">休假：'+(r.lv.map(esc).join('、')||'無')+'</div></td></tr>').join('')+'</tbody></table>';
 }
 $('out').addEventListener('click',e=>{if(RO())return;const f=e.target.closest('[data-ref]');if(f){refDay(f.dataset.ref);renderOut();$('oMsg').textContent=$('calMsg').textContent;return}const b=e.target.closest('[data-edit]');if(b)openDrawer(b.dataset.edit)});
+function pubBar(){
+  const st=pubState(curW),p=PUB[curW],el=$('pubSt');
+  if(RO()){el.className='pubst';el.textContent=p?'公布於 '+fmtAt(p.at):'';return}
+  el.className='pubst'+(st==='pub'?' ok':st==='chg'?' chg':'');
+  el.textContent=st==='none'?'尚未公布':st==='pub'?'✓ 已公布 '+fmtAt(p.at):'已公布，但之後有修改';
+  $('pubBtn').textContent=st==='none'?'公布本週':'重新公布';$('pubBtn').disabled=st==='pub';
+  $('unpubBtn').hidden=st==='none';
+}
+$('pubBtn').onclick=async()=>{
+  if(RO())return;const w=curW;
+  busy(true);
+  try{
+    if(dirtyDays().length){await flush();if(dirtyDays().length){toast('還有修改沒存好，請稍候再按公布',true);return}}
+    const days={},leave={};for(let i=0;i<7;i++){const d=add(w,i);days[d]=S.days[d]||[];if((S.leave[d]||[]).length)leave[d]=S.leave[d]}
+    const r=await api('publish',{week:w,days,leave});Object.assign(PUB,r.pub);renderOut();
+    toast('已公布 '+md(w)+'–'+md(add(w,6))+' 的班表');
+  }catch(e){handleErr(e)}finally{busy(false)}
+};
+$('unpubBtn').onclick=()=>arm($('unpubBtn'),'確定取消公布？','取消公布',async()=>{
+  const w=curW;busy(true);
+  try{await api('unpublish',{week:w});delete PUB[w];renderOut();toast('已取消公布，看班表的同仁暫時看不到這週')}
+  catch(e){handleErr(e)}finally{busy(false)}
+});
 $('copyOut').onclick=()=>{const txt=$('oTitle').textContent+'\n'+weekRows().map(r=>md(r.d)+'（'+wdOf(r.d)+'）\n'+r.L.map(x=>'  '+x.p).join('\n')+'\n  休假：'+(r.lv.join('、')||'無')).join('\n');
   navigator.clipboard.writeText(txt).then(()=>$('oMsg').textContent='已複製，可以貼到 LINE 或試算表。',()=>$('oMsg').textContent='這個檢視器不允許複製，請直接選取表格文字。')};
 
