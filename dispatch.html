@@ -24,6 +24,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Noto Sans TC
 h1{font-size:28px;line-height:1.1;margin:0}.sub{margin:4px 0 0;color:var(--mute);font-size:13px}
 .tabs{display:flex;gap:4px;overflow-x:auto}
 .tabs button{border:0;background:none;color:var(--mute);padding:12px 14px;font:inherit;font-weight:500;border-bottom:3px solid transparent;border-radius:0;min-height:44px;white-space:nowrap}
+.tabs .tablk{color:var(--mute);padding:12px 14px;min-height:44px;white-space:nowrap;text-decoration:none;display:flex;align-items:center;margin-left:auto}.tabs .tablk:hover{color:var(--ink)}
 .tabs button.on{color:var(--ink);border-color:var(--pri)}
 main{padding:16px max(4vw,16px) 48px;max-width:1400px;margin:0 auto}
 .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
@@ -107,9 +108,9 @@ body.ro #tabs [data-v]:not([data-v=out]),body.ro .oed,body.ro #undoM,body.ro #re
 </head>
 <body>
 <header class="top">
-  <div><h1>小日子派工系統</h1><p class="sub"><span id="ver">v1.0.0</span> · <span id="who">未登入</span> · <span id="sync" class="sync">—</span> · <a href="admin.html#roster" class="lk">劃假系統 ›</a> <button id="logout" class="lk btnlk" hidden>登出</button></p></div>
+  <div><h1>小日子派工系統</h1><p class="sub"><span id="ver">v1.0.0</span> · <span id="who">未登入</span> · <span id="sync" class="sync">—</span> <button id="logout" class="lk btnlk" hidden>登出</button></p></div>
   <nav class="tabs" id="tabs">
-    <button data-v="cal" class="on">月曆預排</button><button data-v="week">週派工</button><button data-v="out">班表預覽</button><button data-v="data">資料設定</button>
+    <button data-v="cal" class="on">月曆預排</button><button data-v="week">週派工</button><button data-v="out">班表預覽</button><button data-v="data">資料設定</button><a id="toLeave" class="tablk" href="admin.html#roster">劃假後台 ↗</a>
   </nav>
 </header>
 <main>
@@ -139,11 +140,12 @@ body.ro #tabs [data-v]:not([data-v=out]),body.ro .oed,body.ro #undoM,body.ro #re
     <div class="cols">
       <div><h3 class="dh">地點</h3><div id="dCenters" class="dlist"></div></div>
       <div><h3 class="dh">人員（依職務）</h3><div id="dStaff" class="dlist"></div></div>
-      <div><h3 class="dh">最近異動紀錄</h3><div id="dLog" class="dlist"></div></div>
+      <div><h3 class="dh">最近異動紀錄</h3><div id="dLog" class="dlist"></div>
+        <h3 class="dh">派工權限</h3><div class="dlist"><div class="it">劃假管理員自動可以編輯派工。要另外指定派工管理員或只能看班表的人，到劃假後台的「派工權限」設定。<br><a class="lk" id="toPerm" href="admin.html#dperm">前往派工權限 ›</a></div></div></div>
     </div>
   </section>
 </main>
-<div id="login" class="login" hidden><div class="lbox"><h2>小日子派工系統</h2><p>請用 Google 帳號登入。只有劃假系統的管理員可以使用。</p><div id="gbtn"></div><p id="loginMsg" class="lmsg"></p></div></div>
+<div id="login" class="login" hidden><div class="lbox"><h2>小日子派工系統</h2><p>請用 Google 帳號登入。劃假管理員和有授權的人可以使用。</p><div id="gbtn"></div><p id="loginMsg" class="lmsg"></p></div></div>
 <div id="busy" class="busy" hidden><div class="spin"></div></div>
 <div id="toast" class="toast" hidden></div>
 <div id="drawer" class="drawer" hidden>
@@ -167,7 +169,7 @@ const CONFIG={
   CLIENT_ID:'780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com',
   CENTERS_URL:'https://docs.google.com/spreadsheets/d/1WlFSbmEnhAK2oJUXt3w_SHfehW-aCqxwask-sJPT0O0/edit'
 };
-const VERSION='1.2.0';
+const VERSION='1.3.0';
 const WD='日一二三四五六';
 const pad=n=>String(n).padStart(2,'0');
 const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
@@ -229,7 +231,8 @@ async function start(){
   busy(true);
   try{
     const me=await api('ping');
-    AUTH.me=me;AUTH.role=me.role||'edit';// 舊版後端沒有 role，只有管理員能登入
+    AUTH.me=me;AUTH.role=me.role||'edit';
+    if(me.leaveAdmin===false){$('toLeave').href='index.html';$('toLeave').textContent='劃假系統 ↗';$('toPerm').parentElement.innerHTML='劃假管理員自動可以編輯派工；派工權限由劃假管理員在劃假後台設定。'}// 舊版後端沒有 role，只有管理員能登入
     if(RO()){document.body.classList.add('ro');view='out';curW=mondayOf(ymd(new Date()));
       for(const x of $('tabs').children)x.classList.toggle('on',x.dataset.v==='out');$('tabs').querySelector('[data-v=out]').textContent='班表';
       for(const v of document.querySelectorAll('.view'))v.hidden=v.id!=='v-out';$('oMsg').textContent='紅字為業務，綠字(助)為攝影助理。'}$('login').hidden=true;$('who').textContent=(me.name||me.email||'已登入');$('logout').hidden=false;

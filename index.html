@@ -203,7 +203,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '2.3.2';
+const VERSION = '2.3.3';
 const POLL_MS = 15000;
 const WEEK = '日一二三四五六';
 
@@ -262,11 +262,12 @@ async function start(){
 const NAV = [
   { id: 'leave',    label: '我的劃假', href: 'index.html',         show: me => me.staff },
   { id: 'roster',   label: '排休總表', href: 'admin.html#roster',   show: me => me.admin },
+  { id: 'dispatch', label: '派工',     href: 'dispatch.html',       show: me => me.admin },
   { id: 'quota',    label: '名額設定', href: 'admin.html#quota',    show: me => me.admin },
   { id: 'rules',    label: '職務名額', href: 'admin.html#rules',    show: me => me.admin },
   { id: 'settings', label: '系統設定', href: 'admin.html#settings', show: me => me.admin },
   { id: 'admins',   label: '管理員',   href: 'admin.html#admins',   show: me => me.owner },
-  { id: 'dispatch', label: '派工',     href: 'dispatch.html',       show: me => me.admin },
+  { id: 'dperm',    label: '派工權限', href: 'admin.html#dperm',    show: me => me.admin },
   { id: 'schedule', label: '班表',     href: 'dispatch.html',       show: me => !me.admin && !!me.dispatchRole }
 ];
 // 不是管理員的人，問派工系統有沒有開放看班表；有的話選單多一個「班表」

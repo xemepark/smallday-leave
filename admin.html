@@ -71,6 +71,10 @@
   .preview.warnbg{background:var(--ov)}
   .subnote{font-size:12px;color:var(--sub);margin-top:4px}
   select.text{appearance:auto}
+  .dpall{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-weight:600}
+  .addrow .dprole{flex:none;width:auto}
+  .alist li select{border:1px solid var(--line);border-radius:8px;padding:3px 6px;font:inherit;font-size:12px;background:var(--card);color:var(--ink)}
+  .alist li .r{display:flex;gap:6px;align-items:center}
   .link{background:none;border:0;color:var(--sub);text-decoration:underline;cursor:pointer;font-size:12px;padding:0}
 
   .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px}
@@ -371,6 +375,20 @@
   <div class="btns"><button class="btn ghost" id="aClose">關閉</button></div>
 </div>
 
+<div id="dpermPanel" class="modal" role="dialog" aria-modal="true">
+  <h2>派工權限</h2>
+  <div class="meta">劃假管理員自動是派工管理員，可以編輯派工。下面可以另外指定「派工管理員」（可編輯）或「只能看班表」的人。</div>
+  <label class="dpall"><input type="checkbox" id="dEveryone"> 開放全公司同仁看班表（只能看，不能編輯）</label>
+  <ul class="alist" id="dList"><li>載入中…</li></ul>
+  <div class="addrow">
+    <input class="text" id="dEmail" type="email" placeholder="輸入對方的 Gmail" autocomplete="off">
+    <select class="text dprole" id="dRole"><option value="view">只能看班表</option><option value="edit">派工管理員</option></select>
+    <button id="dAdd">新增</button>
+  </div>
+  <div class="subnote" style="margin-bottom:14px">改完最多 5 分鐘生效。登入設定還在「測試版」時，對方的 Gmail 也要加進 Google Cloud 的「測試使用者」。</div>
+  <div class="btns"><button class="btn ghost" id="dClose">關閉</button></div>
+</div>
+
 <div id="leavePanel" class="modal" role="dialog" aria-modal="true">
   <h2 id="lTitle"></h2>
   <div class="meta" id="lMeta"></div>
@@ -443,7 +461,7 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '2.6.7';
+const VERSION = '2.7.0';
 const WEEK = '日一二三四五六';
 const $ = s => document.querySelector(s);
 const state = { token: null, me: null, data: null, roster: null, view: 'quota', store: null, rStore: '全部', month: null, edit: null, leave: null, busy: false };
@@ -491,6 +509,7 @@ async function applyHash(){
   if (h === 'settings' && state.data) openSettings();
   if (h === 'admins' && state.data) openAdmins();
   if (h === 'rules' && state.data) openRules();
+  if (h === 'dperm') openDperm();
   renderMenu(h);
 }
 window.addEventListener('hashchange', () => { if (state.me) applyHash(); });
@@ -499,11 +518,12 @@ window.addEventListener('hashchange', () => { if (state.me) applyHash(); });
 const NAV = [
   { id: 'leave',    label: '我的劃假', href: 'index.html',         show: me => me.staff },
   { id: 'roster',   label: '排休總表', href: 'admin.html#roster',   show: me => me.admin },
+  { id: 'dispatch', label: '派工',     href: 'dispatch.html',       show: me => me.admin },
   { id: 'quota',    label: '名額設定', href: 'admin.html#quota',    show: me => me.admin },
   { id: 'rules',    label: '職務名額', href: 'admin.html#rules',    show: me => me.admin },
   { id: 'settings', label: '系統設定', href: 'admin.html#settings', show: me => me.admin },
   { id: 'admins',   label: '管理員',   href: 'admin.html#admins',   show: me => me.owner },
-  { id: 'dispatch', label: '派工',     href: 'dispatch.html',       show: me => me.admin },
+  { id: 'dperm',    label: '派工權限', href: 'admin.html#dperm',    show: me => me.admin },
   { id: 'schedule', label: '班表',     href: 'dispatch.html',       show: me => !me.admin && !!me.dispatchRole }
 ];
 // 不是管理員的人，問派工系統有沒有開放看班表；有的話選單多一個「班表」
@@ -785,12 +805,12 @@ function openPanel(role, i){
 function closePanel(silent){
   state.edit = null; state.leave = null;
   $('#backdrop').classList.remove('show');
-  const ids = ['#panel', '#setPanel', '#adminPanel', '#leavePanel', '#dayPanel', '#listPanel', '#personPanel', '#rulesPanel'];
+  const ids = ['#panel', '#setPanel', '#adminPanel', '#dpermPanel', '#leavePanel', '#dayPanel', '#listPanel', '#personPanel', '#rulesPanel'];
   const wasOpen = ids.some(id => $(id).classList.contains('show'));
   ids.forEach(id => $(id).classList.remove('show'));
   // 關掉「系統設定」「管理員」面板時，網址和選單回到目前的畫面
   const h = location.hash.slice(1);
-  if (silent !== true && wasOpen && (h === 'settings' || h === 'admins' || h === 'rules')){
+  if (silent !== true && wasOpen && (h === 'settings' || h === 'admins' || h === 'rules' || h === 'dperm')){
     const v = state.view === 'roster' ? 'roster' : 'quota';
     history.replaceState(null, '', '#' + v);
     renderMenu(v);
@@ -1080,6 +1100,49 @@ async function saveRules(){
 }
 
 /* ===== 管理員（只有系統擁有者） ===== */
+/* ===== 派工權限（資料存在派工系統） ===== */
+async function dapi(action, extra){
+  let data;
+  try { data = await (await fetch(DISPATCH_API, { method:'POST', body: JSON.stringify(Object.assign({ action, idToken: state.token }, extra || {})) })).json(); }
+  catch(e){ const err = new Error('連不到派工系統，請稍後再試'); err.code = 'NETWORK'; throw err; }
+  if (!data.ok){ const err = new Error(data.error || '發生錯誤'); err.code = data.code === 'AUTH' ? 'AUTH' : 'DISPATCH'; throw err; }
+  return data;
+}
+async function openDperm(){
+  $('#dEmail').value = ''; $('#dList').innerHTML = '<li>載入中…</li>';
+  $('#backdrop').classList.add('show'); $('#dpermPanel').classList.add('show');
+  try { state.dperm = await dapi('perms'); fillDperm(); }
+  catch(e){ $('#dList').innerHTML = ''; $('#dList').appendChild(el('li', '', e.message)); if (e.code === 'AUTH') handleError(e); }
+}
+function fillDperm(){
+  const d = state.dperm, ul = $('#dList'); ul.textContent = '';
+  $('#dEveryone').checked = !!d.everyone;
+  d.list.forEach((p, i) => {
+    const li = el('li'); li.append(el('span', '', p.name ? p.name + '（' + p.email + '）' : p.email));
+    const r = el('span', 'r'), s = document.createElement('select');
+    s.innerHTML = '<option value="view">只能看班表</option><option value="edit">派工管理員</option>'; s.value = p.role;
+    s.onchange = () => saveDperm(d.list.map((x, j) => j === i ? Object.assign({}, x, { role: s.value }) : x), d.everyone);
+    const b = el('button', '', '移除');
+    b.onclick = () => { if (b.dataset.confirm){ saveDperm(d.list.filter((x, j) => j !== i), d.everyone); return; } b.dataset.confirm = '1'; b.textContent = '確定移除？'; };
+    r.append(s, b); li.append(r); ul.appendChild(li);
+  });
+  if (!d.list.length) ul.appendChild(el('li', '', '目前沒有另外授權的人'));
+}
+function addDperm(){
+  const e = $('#dEmail').value.trim().toLowerCase();
+  if (!/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(e)){ toast('請輸入正確的 Email', true); return; }
+  if (!state.dperm) return;
+  if (state.dperm.list.some(x => x.email === e)){ toast('這個帳號已經在名單裡，直接改右邊的權限就好', true); return; }
+  saveDperm(state.dperm.list.concat([{ email: e, name: '', role: $('#dRole').value }]), state.dperm.everyone);
+}
+async function saveDperm(list, everyone){
+  if (state.busy) return;
+  setBusy(true);
+  try { state.dperm = await dapi('setPerms', { list, everyone }); $('#dEmail').value = ''; fillDperm(); toast('已更新派工權限'); }
+  catch(e){ toast(e.message, true); if (state.dperm) fillDperm(); if (e.code === 'AUTH') handleError(e); }
+  finally { setBusy(false); }
+}
+
 function openAdmins(){
   fillAdmins();
   $('#aEmail').value = '';
@@ -1231,6 +1294,10 @@ document.querySelectorAll('.modal').forEach(m => { const x = el('button', 'mx', 
 $('#logoutBtn').onclick = () => logout('');
 $('#lClose').onclick = closePanel;
 $('#aAdd').onclick = addAdmin;
+$('#dAdd').onclick = addDperm;
+$('#dEmail').onkeydown = e => { if (e.key === 'Enter') addDperm(); };
+$('#dEveryone').onchange = () => saveDperm(state.dperm.list, $('#dEveryone').checked);
+$('#dClose').onclick = () => closePanel();
 $('#aEmail').onkeydown = e => { if (e.key === 'Enter') addAdmin(); };
 $('#aClose').onclick = closePanel;
 $('#sStart').onchange = updatePreview;
