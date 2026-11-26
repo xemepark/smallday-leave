@@ -109,7 +109,7 @@ body.ro #pubBtn,body.ro #unpubBtn,body.ro #tabs [data-v]:not([data-v=out]),body.
 </head>
 <body>
 <header class="top">
-  <div><h1>小日子派工系統</h1><p class="sub"><span id="ver">v1.4.1</span> · <span id="who">未登入</span> · <span id="sync" class="sync">—</span> <button id="logout" class="lk btnlk" hidden>登出</button></p></div>
+  <div><h1>小日子派工系統</h1><p class="sub"><span id="ver">v1.4.2</span> · <span id="who">未登入</span> · <span id="sync" class="sync">—</span> <button id="logout" class="lk btnlk" hidden>登出</button></p></div>
   <nav class="tabs" id="tabs">
     <button data-v="cal" class="on">月曆預排</button><button data-v="week">週派工</button><button data-v="out">班表預覽</button><button data-v="data">資料設定</button><a id="toLeave" class="tablk" href="admin.html#roster">劃假後台 ↗</a>
   </nav>
@@ -170,7 +170,7 @@ const CONFIG={
   CLIENT_ID:'780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com',
   CENTERS_URL:'https://docs.google.com/spreadsheets/d/1WlFSbmEnhAK2oJUXt3w_SHfehW-aCqxwask-sJPT0O0/edit'
 };
-const VERSION='1.4.1';
+const VERSION='1.4.2';
 const WD='日一二三四五六';
 const pad=n=>String(n).padStart(2,'0');
 const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
@@ -233,7 +233,7 @@ async function start(){
   try{
     const me=await api('ping');
     AUTH.me=me;AUTH.role=me.role||'edit';
-    if(me.leaveAdmin===false){$('toLeave').href='index.html';$('toLeave').textContent='劃假系統 ↗';$('toPerm').parentElement.innerHTML='劃假管理員自動可以編輯派工；派工權限由劃假管理員在劃假後台設定。'}// 舊版後端沒有 role，只有管理員能登入
+    if(me.leaveAdmin===false){$('toLeave').href='index.html';$('toLeave').textContent='劃假系統 ↗';{const tp=$('toPerm');if(tp)tp.parentElement.innerHTML='劃假管理員自動可以編輯派工；派工權限由劃假管理員在劃假後台設定。'}}// 舊版後端沒有 role，只有管理員能登入
     if(RO()){document.body.classList.add('ro');view='out';curW=mondayOf(ymd(new Date()));
       for(const x of $('tabs').children)x.classList.toggle('on',x.dataset.v==='out');$('tabs').querySelector('[data-v=out]').textContent='班表';
       for(const v of document.querySelectorAll('.view'))v.hidden=v.id!=='v-out';$('oMsg').textContent='紅字為業務，綠字(助)為攝影助理。只看得到已公布的週。'}$('login').hidden=true;$('who').textContent=(me.name||me.email||'已登入');$('logout').hidden=false;
