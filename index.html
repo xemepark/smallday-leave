@@ -203,8 +203,8 @@ const CONFIG = {
   API_URL:   'https://script.google.com/macros/s/AKfycbwSHhNQ1JqDzJ3GZr0eGOs1pAAh8QProNN2W0u5A3xTBNKiZn-fn3qsq2_pF6KAC-K4AA/exec',
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
-const VERSION = '2.3.3';
-const POLL_MS = 15000;
+const VERSION = '2.4.0';
+const POLL_MS = 30000;   // 自動更新間隔；資料沒變時後端只回「沒變」，很快
 const WEEK = '日一二三四五六';
 
 const $ = s => document.querySelector(s);
@@ -248,10 +248,12 @@ function setToken(t){
 async function start(){
   setBusy(true);
   try {
+    // 確認身分和讀月曆同時進行，不用一個等一個
+    const pLoad = api('load', { month: state.month }); pLoad.catch(() => {});
     state.me = await api('whoami');
     if (!state.me.staff){ location.replace('admin.html#quota'); return; }
     setBusy(false);
-    await load(true);
+    await load(true, pLoad);
     renderMenu('leave');
     checkDispatch('leave');
   } catch(e){ handleError(e); }
@@ -323,10 +325,17 @@ function handleError(e){
   toast(e.message, true);
 }
 
-async function load(first){
+async function load(first, pre){
   if (first) setBusy(true);
   try {
-    render(await api('load', { month: state.month }));
+    // 自動更新時帶上目前資料的版本；後端資料沒變就回 same，不用重畫
+    const extra = { month: state.month };
+    const poll = !first && !pre && state.data && state.data.month === state.month && state.ver;
+    if (poll && (state.polls = (state.polls || 0) + 1) % 4 !== 0) extra.since = state.ver;
+    const d = await (pre || api('load', extra));
+    if (d.same) return;
+    state.ver = d.ver || null;
+    render(d);
     if (first) startPoll();
   } catch(e){ handleError(e); }
   finally { if (first) setBusy(false); }
