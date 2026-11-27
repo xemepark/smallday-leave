@@ -86,6 +86,22 @@
   .chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 14px;cursor:pointer;font:inherit;color:var(--ink)}
   .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
   .tag{font-size:12px;color:var(--sub)}
+  .modebar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:12px}
+  .mstate{display:flex;align-items:center;gap:8px;font-size:14px}
+  .mstate i{width:10px;height:10px;border-radius:50%;background:var(--sub);flex:none}
+  .mstate.open i{background:var(--ok)} .mstate.paused i,.mstate.closed i{background:var(--accent)} .mstate.before i,.mstate.unset i{background:var(--ov)}
+  .mstate small{display:block;color:var(--sub);font-size:12px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;flex:none}
+  .seg button{border:0;background:var(--card);font:inherit;font-size:13px;padding:7px 12px;cursor:pointer;color:var(--ink)}
+  .seg button+button{border-left:1px solid var(--line)}
+  .seg button.on{background:var(--ink);color:#fff}
+  .seg button.ask{background:var(--accent);color:#fff}
+  .syncbox{flex-basis:100%;border-top:1px dashed var(--line);padding-top:8px;font-size:13px}
+  .syncbox summary{cursor:pointer;color:var(--sub)}
+  .syncrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .syncrow button{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px 10px;font:inherit;font-size:13px;cursor:pointer;color:var(--ink);text-align:left;flex:1 1 200px}
+  .syncrow button small{display:block;color:var(--sub);font-size:11px}
+  .syncrow button.ask{border-color:var(--accent);background:var(--accent-bg)}
   .tag b{color:var(--accent)}
 
   .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--sub);margin:4px 0 8px}
@@ -251,6 +267,21 @@
 
     <nav class="menu" id="menu"></nav>
 
+    <div class="modebar" id="modeBar">
+      <div class="mstate" id="modeState"><i></i><div><b id="modeTitle"></b><small id="modeSub"></small></div></div>
+      <div class="seg" id="modeSeg">
+        <button type="button" data-m="自動">依預約時間</button><button type="button" data-m="開放">手動開放</button><button type="button" data-m="暫停">手動暫停</button>
+      </div>
+      <details class="syncbox" id="syncBox">
+        <summary>跟 Google 試算表同步</summary>
+        <div class="syncrow">
+          <button type="button" data-op="pull"><b>Firestore → 試算表</b><small>把最新的劃假紀錄、設定寫回試算表（每天凌晨 3 點也會自動做）</small></button>
+          <button type="button" data-op="push"><b>試算表 → Firestore（只有設定）</b><small>名額、公休、系統設定、人員；劃假紀錄不動。開放中也可以用</small></button>
+          <button type="button" data-op="pushAll"><b>試算表 → Firestore（含劃假紀錄）</b><small>以試算表為準覆蓋劃假紀錄，要先「手動暫停」</small></button>
+        </div>
+      </details>
+    </div>
+
     <div class="bar">
       <div class="month"><button id="prev" aria-label="上個月">‹</button><b id="monthLabel"></b><button id="next" aria-label="下個月">›</button></div>
       <div class="chips" id="stores"></div>
@@ -337,11 +368,12 @@
   <div class="preview" id="sPreview"></div>
 
   <div class="field">
-    <label>劃假開放時間</label>
+    <label>預約開放／結束時間（「依預約時間」時才會生效）</label>
     <div class="grid2">
-      <div><input class="text" type="datetime-local" id="sOpen"><div class="subnote">開始</div></div>
-      <div><input class="text" type="datetime-local" id="sClose"><div class="subnote">截止</div></div>
+      <div><input class="text" type="datetime-local" id="sOpen"><div class="subnote">自動開放</div></div>
+      <div><input class="text" type="datetime-local" id="sClose"><div class="subnote">自動結束</div></div>
     </div>
+    <div class="subnote">手動開放或手動暫停時，可以留白；切回「依預約時間」前要填好。</div>
   </div>
 
   <div class="field">
@@ -713,6 +745,7 @@ function render(d){
   $('#monthLabel').textContent = y + ' 年 ' + Number(m) + ' 月';
   $('#bookingTag').innerHTML = '';
   $('#bookingTag').append('目前開放劃假：', el('b', '', d.bookingMonth));
+  renderMode(d.config);
 
   if (state.view === 'roster') return;
   const chips = $('#stores'); chips.textContent = '';
@@ -1218,6 +1251,60 @@ async function saveAdmins(list){
   finally { setBusy(false); }
 }
 
+/* ===== 劃假狀態（依預約時間／手動開放／手動暫停） ===== */
+function renderMode(c){
+  if (!c) return;
+  const mode = c.mode || '自動', st = c.status || '';
+  const box = $('#modeState');
+  let title, sub = '';
+  if (mode === '開放'){ title = '手動開放中'; sub = '同仁可以劃假・預約時間暫不生效'; }
+  else if (mode === '暫停'){ title = '手動暫停中'; sub = '同仁只能查看、不能劃假或取消・預約時間暫不生效'; }
+  else if (st === 'open'){ title = '開放中（依預約時間）'; sub = c.closeAt + ' 自動結束'; }
+  else if (st === 'before'){ title = '尚未開放（依預約時間）'; sub = c.openAt + ' 自動開放'; }
+  else if (st === 'closed'){ title = '已結束（依預約時間）'; sub = c.closeAt + ' 已自動結束'; }
+  else { title = '還沒設定預約時間'; sub = '到「系統設定」填預約開放／結束時間，或直接手動開放'; }
+  box.className = 'mstate ' + (mode === '開放' ? 'open' : mode === '暫停' ? 'paused' : st);
+  $('#modeTitle').textContent = title; $('#modeSub').textContent = sub;
+  state.modeAsk = null;
+  document.querySelectorAll('#modeSeg button').forEach(b => { b.classList.toggle('on', b.dataset.m === mode); b.classList.remove('ask'); b.textContent = MODE_LABEL[b.dataset.m]; });
+}
+const MODE_LABEL = { '自動': '依預約時間', '開放': '手動開放', '暫停': '手動暫停' };
+async function setMode(m){
+  const c = state.data && state.data.config;
+  if (!c || state.busy || m === (c.mode || '自動')) return;
+  // 按兩次才切換，避免手滑
+  if (state.modeAsk !== m){
+    state.modeAsk = m;
+    document.querySelectorAll('#modeSeg button').forEach(b => { const ask = b.dataset.m === m; b.classList.toggle('ask', ask); b.textContent = ask ? '確定' + MODE_LABEL[m].replace('依', '改依') + '？' : MODE_LABEL[b.dataset.m]; });
+    return;
+  }
+  setBusy(true);
+  try { const d = await api('adminSetMode', { mode: m }); render(d); toast(d.message || '已切換'); }
+  catch(e){ renderMode(c); handleError(e); }
+  finally { setBusy(false); }
+}
+
+const SYNC_LABEL = { pull: 'Firestore → 試算表', push: '試算表 → Firestore（只有設定）', pushAll: '試算表 → Firestore（含劃假紀錄）' };
+async function runSync(op, btn){
+  const c = state.data && state.data.config;
+  if (state.busy || !c) return;
+  if (op === 'pushAll' && c.mode !== '暫停'){ toast('要連劃假紀錄一起同步，請先按上面的「手動暫停」', true); return; }
+  if (state.syncAsk !== op){
+    state.syncAsk = op;
+    document.querySelectorAll('#syncBox button').forEach(b => { b.classList.toggle('ask', b === btn); b.querySelector('b').textContent = b === btn ? '再按一次確定：' + SYNC_LABEL[op] : SYNC_LABEL[b.dataset.op]; });
+    return;
+  }
+  state.syncAsk = null;
+  document.querySelectorAll('#syncBox button').forEach(b => { b.classList.remove('ask'); b.querySelector('b').textContent = SYNC_LABEL[b.dataset.op]; });
+  setBusy(true);
+  try {
+    const r = await api('fsSync', { op });
+    toast(r.message || '同步完成');
+    if (op !== 'pull'){ const d = await api('adminLoad', { month: state.month }); render(d); }
+  } catch(e){ handleError(e); }
+  finally { setBusy(false); }
+}
+
 /* ===== 系統設定 ===== */
 function addMonths(mo, n){ const [y, m] = mo.split('-').map(Number); const t = new Date(y, m - 1 + n, 1); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0'); }
 function thisMonth(){ const t = new Date(); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0'); }
@@ -1345,6 +1432,8 @@ $('#aClose').onclick = closePanel;
 $('#sStart').onchange = updatePreview;
 $('#sCount').onchange = updatePreview;
 $('#sSave').onclick = saveSettings;
+document.querySelectorAll('#modeSeg button').forEach(b => { b.onclick = () => setMode(b.dataset.m); });
+document.querySelectorAll('#syncBox button').forEach(b => { b.onclick = () => runSync(b.dataset.op, b); });
 $('#sLeave').oninput = () => { if (state.rl) renderRoleLeave(); };
 $('#sCancel').onclick = closePanel;
 $('#dCancel').onclick = closePanel;
@@ -1363,8 +1452,8 @@ document.querySelectorAll('input[name=dmode]').forEach(r => r.onchange = syncDay
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js?v=1.0.0"></script>
-<script src="engine-core.js?v=1.0.0"></script>
-<script src="engine.js?v=1.0.0"></script>
+<script src="engine-core.js?v=1.1.0"></script>
+<script src="engine.js?v=1.1.0"></script>
 <script>onGsiLoad();</script>
 </body>
 </html>

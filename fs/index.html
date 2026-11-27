@@ -41,7 +41,7 @@
   .status{border-radius:12px;padding:10px 12px;font-size:14px;margin-bottom:10px}
   .status.open{background:var(--ok-bg);color:var(--ok)}
   .status.before,.status.unset{background:var(--other-bg);color:var(--other)}
-  .status.closed{background:var(--full-bg);color:var(--sub)}
+  .status.closed,.status.paused{background:var(--full-bg);color:var(--sub)}
 
   .counts{display:flex;gap:8px;margin-bottom:10px}
   .count{flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
@@ -387,7 +387,8 @@ function render(d){
   const st = $('#status');
   st.className = 'status ' + d.window.status;
   st.textContent = {
-    open:   '開放劃假中・' + d.window.closeAt + ' 截止',
+    open:   d.window.mode === '開放' ? '開放劃假中' : '開放劃假中・' + d.window.closeAt + ' 截止',
+    paused: '目前暫停劃假，請等管理員開放（可以先看名額）',
     before: '尚未開放・' + d.window.openAt + ' 開始劃假',
     closed: '劃假已截止（' + d.window.closeAt + '），要調整請找人換班並經主管同意',
     unset:  '主管還沒設定劃假時間'
@@ -515,6 +516,7 @@ function fillSheet(date){
   if (day.holiday) return disable('全公司公休', '這天大家統一放假（' + day.holiday + '），不用劃，也不佔自排');
   if (day.mine === '自排' && day.mineBy === 'admin') return disable('已排休', '這天是主管幫你排的，要調整請洽主管');
   if (day.mine === '自排'){
+    if (d.window.status === 'paused') return disable('取消這天', '目前暫停劃假，請等管理員開放');
     if (d.window.status !== 'open') return disable('取消這天', '不在劃假時間，要調整請找人換班並經主管同意');
     btn.className = 'btn danger' + (state.confirmCancel ? ' confirm' : '');
     btn.textContent = state.confirmCancel ? '確定取消這天？' : '取消這天排休';
@@ -525,6 +527,7 @@ function fillSheet(date){
     return;
   }
   if (day.mine) return disable('已排' + day.mine, '這天是主管排的' + day.mine + '，要調整請洽主管');
+  if (d.window.status === 'paused') return disable('劃這天排休', '目前暫停劃假，請等管理員開放');
   if (d.window.status !== 'open') return disable('劃這天排休', '目前不在劃假時間');
   if (!day.unlimited){
     if (day.quota === null) return disable('劃這天排休', '請洽主管設定名額');
@@ -573,8 +576,8 @@ $('#onlyMine').addEventListener('change', () => { if (state.data) renderList(sta
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js?v=1.0.0"></script>
-<script src="engine-core.js?v=1.0.0"></script>
-<script src="engine.js?v=1.0.0"></script>
+<script src="engine-core.js?v=1.1.0"></script>
+<script src="engine.js?v=1.1.0"></script>
 <script>onGsiLoad();</script>
 </body>
 </html>

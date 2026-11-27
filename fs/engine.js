@@ -13,7 +13,7 @@
 (function () {
   'use strict';
   const C = window.LeaveCore;
-  const FS_VERSION = '1.0.0';
+  const FS_VERSION = '1.1.0';
   const OWNER = 'xemepark@gmail.com';
   const BOOK_HEADER = ['日期', 'Email', '姓名', '職位', '門市', '類型', '建立時間', '建立者'];
   const LOG_HEADER = ['時間', 'Email', '姓名', '動作', '內容'];
@@ -106,6 +106,17 @@
   const err = (msg, code) => ({ ok: false, error: msg, code });
 
   /* ---------- 劃假、取消、代排：Firestore 交易 ---------- */
+  /** 試算表 ↔ Firestore 同步：交給 Apps Script 後端做（用 Firebase 登入憑證證明是管理員） */
+  async function syncWithSheet(op) {
+    try {
+      const tok = await auth.currentUser.getIdToken();
+      // eslint-disable-next-line no-undef
+      const res = await realFetch(CONFIG.API_URL, { method: 'POST', body: JSON.stringify({ action: 'fsSync', op, fbToken: tok }) });
+      return await res.json();
+    } catch (e) {
+      return err('連不到試算表後端，請檢查網路後再試', 'NETWORK');
+    }
+  }
   async function txWrite(body) {
     const date = String(body.date || '');
     const m = date.slice(0, 7);
@@ -154,7 +165,7 @@
       // 交易失敗：多半是名額被搶走（安全規則擋下），或沒網路
       if (months[m]) setMonthRows(m, months[m].b);
       const denied = e && (e.code === 'permission-denied');
-      return err(denied ? '這天的名額剛剛被劃走了，或現在不在開放劃假時間' : '連線失敗，請檢查網路後再試', denied ? 'FULL' : 'NETWORK');
+      return err(denied ? '這天的名額剛剛被劃走了，或管理員剛剛暫停劃假' : '連線失敗，請檢查網路後再試', denied ? 'FULL' : 'NETWORK');
     }
     if (result && result.ok) flushLogs(1);
     return result;
@@ -175,7 +186,7 @@
     if (s.owner && admins.indexOf(s.owner) < 0) admins.push(s.owner);
     return {
       admins, staffMap, owner: s.owner || '',
-      window: { openMs: s.openAt ? s.openAt.getTime() : 0, closeMs: s.closeAt ? s.closeAt.getTime() : 0, months: s.months || [] }
+      window: { mode: s.mode || '自動', openMs: s.openAt ? s.openAt.getTime() : 0, closeMs: s.closeAt ? s.closeAt.getTime() : 0, months: s.months || [] }
     };
   }
 
@@ -245,6 +256,7 @@
     if (readyErr && readyErr.code === 'permission-denied') return err('這個帳號（' + authEmail() + '）不在人員名單裡，請洽主管', 'NOT_STAFF');
     if (!cfg) return err('Firestore 版還沒匯入資料，請洽系統擁有者', 'SETUP');
     const a = body.action;
+    if (a === 'fsSync') return syncWithSheet(body.op);
     if (a === 'adminLoad' || a === 'adminRoster') ensurePublished();
     if (READ.indexOf(a) >= 0) return run(body);
     if (TX.indexOf(a) >= 0) return txWrite(body);

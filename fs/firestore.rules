@@ -1,6 +1,6 @@
 rules_version = '2';
 // 小日子劃假系統（Firestore 版）安全規則
-// 重點：同仁只能劃／取消「自己的自排」，而且一定要在開放時間內、名額還有；設定和代排只有管理員能改。
+// 重點：同仁只能劃／取消「自己的自排」，而且一定要在開放中（手動開放，或預約時間內且沒有手動暫停）、名額還有；設定和代排只有管理員能改。
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -29,6 +29,12 @@ service cloud.firestore {
       allow update: if isAdmin() || (isStaff() && staffChange(m));
     }
 
+    // 劃假狀態：開放＝手動開放、暫停＝手動暫停（都優先於預約時間）；其他＝依預約開放／結束時間
+    function windowOpen(w, now) {
+      let mode = w.get('mode', '自動');
+      return mode == '開放' || (mode != '暫停' && now >= w.openMs && now <= w.closeMs);
+    }
+
     // 同仁劃／取消自己的一筆自排
     function staffChange(m) {
       let c = cfg();
@@ -38,7 +44,7 @@ service cloud.firestore {
       let b = resource.data;
       let k = a.last.k;
       let s = a.last.s;
-      return now >= c.window.openMs && now <= c.window.closeMs
+      return windowOpen(c.window, now)
         && a.diff(b).affectedKeys().hasOnly(['b', 'c', 'last'])
         && a.b.diff(b.b).affectedKeys().hasOnly([k])
         && a.c.diff(b.c).affectedKeys().hasOnly([s])

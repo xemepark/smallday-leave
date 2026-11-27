@@ -9,7 +9,7 @@
  *           所以只能劃自己的假，不能代填。
  */
 
-const VERSION = '2.3.5';
+const VERSION = '2.4.0';
 const TZ = 'Asia/Taipei';
 const SH = {
   SETTINGS: '設定',
@@ -46,7 +46,7 @@ function doGet() {
 
 /* 只讀的動作可以用快取；其他會寫入的動作一律讀最新資料，做完把快取版本往前推 */
 const READ_ACTIONS = ['whoami', 'load', 'adminLoad', 'adminRoster'];
-const WRITE_ACTIONS = ['book', 'cancel', 'adminSet', 'adminSaveSettings', 'adminSetAdmins', 'adminSetLeave', 'adminSetDay', 'adminSaveRules'];
+const WRITE_ACTIONS = ['book', 'cancel', 'fsSync', 'adminSet', 'adminSaveSettings', 'adminSetMode', 'adminSetAdmins', 'adminSetLeave', 'adminSetDay', 'adminSaveRules'];
 
 function doPost(e) {
   for (const k in MEMO_) delete MEMO_[k];
@@ -80,6 +80,7 @@ function doPostInner_(e) {
   }
   try {
     if (req.action === 'whoami') return json_(whoami_(req.idToken));
+    if (req.action === 'fsSync') return json_(fsSyncByAdmin_(req.fbToken, req.op));
     if (String(req.action || '').indexOf('admin') === 0) {
       const admin = verifyAdmin_(req.idToken);
       switch (req.action) {
@@ -89,10 +90,14 @@ function doPostInner_(e) {
           return json_(adminSet_(admin, req));
         case 'adminSaveSettings':
           return json_(adminSaveSettings_(admin, req.settings || {}));
+        case 'adminSetMode':
+          return json_(adminSetMode_(admin, req.mode));
         case 'adminSetAdmins':
           return json_(adminSetAdmins_(admin, req.admins));
         case 'adminRoster':
           return json_(adminRoster_(admin, req.month));
+        case 'adminExport':
+          return json_(adminExport_(admin));
         case 'adminSetLeave':
           return json_(adminSetLeave_(admin, req));
         case 'adminSetDay':
@@ -369,6 +374,7 @@ function buildView_(me, ctx, month) {
     months: s.months,
     window: {
       status: windowStatus_(s),
+      mode: s.mode,
       openAt: s.openAt ? fmt_(s.openAt, 'yyyy-MM-dd HH:mm') : '',
       closeAt: s.closeAt ? fmt_(s.closeAt, 'yyyy-MM-dd HH:mm') : ''
     },
@@ -922,6 +928,8 @@ function adminConfig_(s) {
     months: s.months,
     openAt: s.openAt ? fmt_(s.openAt, 'yyyy-MM-dd HH:mm') : '',
     closeAt: s.closeAt ? fmt_(s.closeAt, 'yyyy-MM-dd HH:mm') : '',
+    mode: s.mode,
+    status: windowStatus_(s),
     maxLeave: s.monthOff,
     monthOff: s.monthOff,
     roleLeave: s.roleLeave,
@@ -944,10 +952,14 @@ function adminSaveSettings_(admin, cfg) {
   };
   out['開放月數'] = intIn(cfg.monthCount, 1, 6, '開放月數');
   const openAt = toTime_(cfg.openAt), closeAt = toTime_(cfg.closeAt);
-  if (!openAt || !closeAt) fail_('開放和截止時間都要填', 'BAD_REQUEST');
-  if (closeAt.getTime() <= openAt.getTime()) fail_('截止時間要晚於開放時間', 'BAD_REQUEST');
-  out['開放時間'] = fmt_(openAt, 'yyyy-MM-dd HH:mm');
-  out['截止時間'] = fmt_(closeAt, 'yyyy-MM-dd HH:mm');
+  const mode = cfg.mode === undefined ? getSettings_().mode : normMode_(cfg.mode);
+  if (String(cfg.openAt || '').trim() && !openAt) fail_('預約開放時間格式不對', 'BAD_REQUEST');
+  if (String(cfg.closeAt || '').trim() && !closeAt) fail_('預約結束時間格式不對', 'BAD_REQUEST');
+  if (mode === '自動' && (!openAt || !closeAt)) fail_('「依預約時間」要填預約開放和結束時間（或改成手動開放／暫停）', 'BAD_REQUEST');
+  if (openAt && closeAt && closeAt.getTime() <= openAt.getTime()) fail_('預約結束時間要晚於開放時間', 'BAD_REQUEST');
+  out['開放時間'] = openAt ? fmt_(openAt, 'yyyy-MM-dd HH:mm') : '';
+  out['截止時間'] = closeAt ? fmt_(closeAt, 'yyyy-MM-dd HH:mm') : '';
+  out['劃假狀態'] = mode;
   out['每月休假天數'] = intIn(cfg.monthOff, 0, 31, '每月休假天數');
   const rl = cfg.roleLeave && typeof cfg.roleLeave === 'object' ? cfg.roleLeave : {};
   out['職務自排公排'] = Object.keys(rl).filter(r => String(r).trim()).map(r => {
@@ -961,7 +973,8 @@ function adminSaveSettings_(admin, cfg) {
     '劃假月份': '開放劃假的起始月份；空白＝自動從下個月開始（也可以填多個月份，用逗號分隔）',
     '開放月數': '從起始月份開始，一次開放幾個月',
     '每月休假天數': '沒有另外設定的職務，每月這幾天都可以自排',
-    '職務自排公排': '格式 職務:自排天數:公排天數，多個用逗號分隔，例如 攝影師:5:3,安撫師:5:3'
+    '職務自排公排': '格式 職務:自排天數:公排天數，多個用逗號分隔，例如 攝影師:5:3,安撫師:5:3',
+    '劃假狀態': MODE_DESC_
   };
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) fail_('系統忙碌中，請過幾秒再試', 'BUSY');
@@ -1024,6 +1037,7 @@ function readSettings_() {
     months: months,
     openAt: toTime_(m['開放時間']),
     closeAt: toTime_(m['截止時間']),
+    mode: normMode_(m['劃假狀態']),
     monthOff: num_(m['每月休假天數'], 8),
     maxLeave: num_(m['每月休假天數'], 8),
     roleLeave: parseRoleLeave_(m['職務自排公排']),
@@ -1215,7 +1229,39 @@ function getBookings_(months) {
 
 /* ============================== 小工具 ============================== */
 
+/* 劃假狀態：自動＝依預約開放／結束時間；開放、暫停＝管理員手動切換，優先於預約時間 */
+const MODE_DESC_ = '自動＝依預約開放／結束時間；開放＝手動開放（不看預約時間）；暫停＝手動暫停，同仁只能查看';
+function normMode_(v) {
+  const t = String(v || '').trim();
+  if (/^(開放|手動開放|open)$/i.test(t)) return '開放';
+  if (/^(暫停|手動暫停|關閉|pause|paused|closed)$/i.test(t)) return '暫停';
+  return '自動';
+}
+/** 管理員快速切換劃假狀態（自動／開放／暫停），只改這一格 */
+function adminSetMode_(admin, mode) {
+  const m = normMode_(mode);
+  const s = getSettings_();
+  if (m === '自動' && (!s.openAt || !s.closeAt)) fail_('還沒設定預約開放／結束時間，請先到系統設定填好，再切回「依預約時間」', 'BAD_REQUEST');
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) fail_('系統忙碌中，請過幾秒再試', 'BUSY');
+  try {
+    const sh = sheet_(SH.SETTINGS);
+    const values = sh.getDataRange().getValues();
+    let row = -1;
+    for (let i = 1; i < values.length; i++) if (String(values[i][0]).trim() === '劃假狀態') { row = i + 1; break; }
+    if (row > 0) sh.getRange(row, 2).setValue(m);
+    else sh.appendRow(['劃假狀態', m, MODE_DESC_]);
+    log_({ email: admin, name: '管理員' }, '切換劃假狀態', m);
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+  const label = { '自動': '已切回依預約時間', '開放': '已手動開放劃假', '暫停': '已手動暫停劃假' }[m];
+  return Object.assign(adminView_(admin), { message: label });
+}
 function windowStatus_(s) {
+  if (s.mode === '開放') return 'open';
+  if (s.mode === '暫停') return 'paused';
   if (!s.openAt || !s.closeAt) return 'unset';
   const now = Date.now();
   if (now < s.openAt.getTime()) return 'before';
@@ -1225,6 +1271,7 @@ function windowStatus_(s) {
 
 function assertOpen_(s) {
   const st = windowStatus_(s);
+  if (st === 'paused') fail_('目前暫停劃假，請等管理員開放', 'CLOSED');
   if (st === 'unset') fail_('主管還沒設定劃假時間', 'CLOSED');
   if (st === 'before') fail_('劃假 ' + fmt_(s.openAt, 'M/d HH:mm') + ' 才開放', 'CLOSED');
   if (st === 'closed') fail_('劃假已經截止，要調整請找人換班並經主管同意', 'CLOSED');
@@ -1269,6 +1316,388 @@ function rows_(name) {
   }
   MEMO_[mk] = out;
   return out;
+}
+
+/** 系統擁有者：把整份資料匯出（給 Firestore 版匯入用）。人員來源只帶 姓名／Email／部門／職稱／狀態 五欄 */
+function adminExport_(admin) {
+  const s = getSettings_();
+  if (admin !== s.owner) fail_('只有系統擁有者可以匯出', 'NOT_OWNER');
+  const all = name => {
+    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
+    return sh ? packVals_(sh.getDataRange().getValues()) : [];
+  };
+  const tables = {};
+  [SH.SETTINGS, SH.STAFF, SH.QUOTA, SH.OVERRIDE, SH.HOLIDAY, SH.DEPT, SH.TITLE].forEach(n => { tables[n] = all(n); });
+  const book = all(SH.BOOK).slice(1);
+  return { ok: true, tables: tables, bookings: book, staffSrc: staffSrcRows_(s) };
+}
+
+/** 人員來源表只讀這 5 欄（姓名、Email、部門、職稱、狀態），其他欄位（身分證、薪資…）一律不碰 */
+function staffSrcRows_(s) {
+  const out = [['姓名', 'Email', '部門', '職稱', '狀態']];
+  if (!s.staffSource) return out;
+  const sh = SpreadsheetApp.openById(s.staffSource).getSheetByName(s.staffSheet);
+  const last = sh.getLastRow();
+  if (last < 2) return out;
+  const header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(x => String(x).trim());
+  const cols = ['姓名', 'Email', '部門', '職稱', '狀態'].map(n => header.indexOf(n) + 1);
+  const data = cols.map(c => c > 0 ? sh.getRange(2, c, last - 1, 1).getValues().map(r => r[0]) : []);
+  for (let i = 0; i < last - 1; i++) out.push(data.map(col => col[i] === undefined ? '' : String(col[i])));
+  return out;
+}
+
+/* ============================== 同步到 Firestore 版（v2.4.0） ==============================
+ * syncAllToFirestore()：把整份試算表（設定、名額、人員、劃假紀錄）複製到 Firestore 版。只在第一次搬家時用；
+ *   Firestore 已經有資料時會停下來，避免蓋掉新版上的排休（真的要覆蓋，執行 syncAllToFirestoreForce）。
+ * syncStaffToFirestore()：只更新人員名單（小日子員工資料 → Firestore），installFsTrigger() 會讓它每小時自動跑。
+ */
+const FS_PROJECT = 'smallday-leave';
+const FS_VERSION_ = '1.1.0';
+const FS_BASE_ = 'https://firestore.googleapis.com/v1/projects/' + FS_PROJECT + '/databases/(default)/documents';
+
+function syncAllToFirestore() { return fsSyncAll_(false); }
+function syncAllToFirestoreForce() { return fsSyncAll_(true); }
+
+function fsSyncAll_(force) {
+  fsReset_();
+  const s = getSettings_();
+  if (!force && fsGet_('cfg/main')) throw new Error('Firestore 版已經有資料了，為了不蓋掉新版上的排休，這次沒有複製。真的要覆蓋請執行 syncAllToFirestoreForce');
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const tables = {};
+  [SH.SETTINGS, SH.STAFF, SH.QUOTA, SH.OVERRIDE, SH.HOLIDAY, SH.DEPT, SH.TITLE].forEach(n => {
+    const sh = ss.getSheetByName(n);
+    tables[n] = JSON.stringify(sh ? packVals_(sh.getDataRange().getValues()) : [[]]);
+  });
+  const bookSh = ss.getSheetByName(SH.BOOK);
+  const rows = bookSh ? bookSh.getDataRange().getValues().slice(1) : [];
+  const byMonth = {};
+  rows.forEach(r => {
+    const x = fsEntry_(r);
+    if (!x.d || !x.e) return;
+    const m = x.d.slice(0, 7);
+    (byMonth[m] = byMonth[m] || {})[x.d + '_' + x.e] = x;
+  });
+  const list = (s.months || []).concat(Object.keys(byMonth)).filter((m, i, a) => m && a.indexOf(m) === i).sort();
+  const pub = Date.now();
+  const cfg = Object.assign({ tables: tables, staffSrc: JSON.stringify(staffSrcRows_(s)), pub: pub, fsVersion: FS_VERSION_ }, fsDerived_(s));
+  const writes = [fsUpdate_('cfg/main', cfg)];
+  list.forEach(m => {
+    const b = byMonth[m] || {};
+    fsReset_();
+    const pools = fsPools_(m, fsCombos_(b));
+    Object.keys(b).forEach(k => { b[k].sl = pools.pm[b[k].d + '|' + b[k].r + '|' + b[k].st] || ''; });
+    writes.push(fsUpdate_('months/' + m, { b: b, pm: pools.pm, q: pools.q, c: fsCount_(b, pools.pm), pub: pub, last: { k: '', s: '', op: 'admin' } }));
+  });
+  fsCommit_(writes);
+  const msg = '已複製到 Firestore：人員 ' + Object.keys(cfg.staffMap).length + ' 位、劃假紀錄 ' + rows.length + ' 筆、月份 ' + list.join(', ');
+  Logger.log(msg);
+  return msg;
+}
+
+function syncStaffToFirestore() {
+  fsReset_();
+  const s = getSettings_();
+  if (!fsGet_('cfg/main')) throw new Error('Firestore 版還沒有資料，請先執行 syncAllToFirestore');
+  const d = fsDerived_(s);
+  fsCommit_([fsUpdate_('cfg/main', { staffSrc: JSON.stringify(staffSrcRows_(s)), staffMap: d.staffMap }, ['staffSrc', 'staffMap'])]);
+  const msg = '已更新 Firestore 人員名單：' + Object.keys(d.staffMap).length + ' 位';
+  Logger.log(msg);
+  return msg;
+}
+
+function installFsTrigger() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (['syncStaffToFirestore', 'nightlyPullFromFirestore'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('syncStaffToFirestore').timeBased().everyHours(1).create();
+  ScriptApp.newTrigger('nightlyPullFromFirestore').timeBased().everyDays(1).atHour(3).inTimezone(TZ).create();
+  return syncStaffToFirestore() + '；已設定每小時同步人員、每天凌晨 3 點把 Firestore 匯出到試算表';
+}
+
+/* ---- Firestore → 試算表（每晚自動＋管理員手動） ----
+ * 劃假紀錄：以 Firestore 為準整份寫回（試算表只當查看用的副本）。
+ * 設定類工作表：也寫回，但「試算表手動改過、還沒同步到 Firestore」的工作表會先跳過，避免蓋掉你剛改的東西。
+ */
+const FS_TABLES_ = () => [SH.SETTINGS, SH.STAFF, SH.QUOTA, SH.OVERRIDE, SH.HOLIDAY, SH.DEPT, SH.TITLE];
+function nightlyPullFromFirestore() { return pullFromFirestore('每晚自動'); }
+function pullFromFirestore(by) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) throw new Error('系統忙碌中，請過一下再試');
+  try {
+    const cur = fsGetDoc_('cfg/main');
+    if (!cur) throw new Error('Firestore 版還沒有資料');
+    const cfg = cur.data, months = fsListMonths_();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const dirty = fsDirty_(), skipped = [];
+    FS_TABLES_().forEach(n => {
+      if (!cfg.tables || cfg.tables[n] === undefined) return;
+      if (dirty[n]) { skipped.push(n); return; }
+      fsWriteSheet_(ss.getSheetByName(n), unpackVals_(JSON.parse(cfg.tables[n])));
+    });
+    // 劃假紀錄：Firestore 有的月份整個換掉，其他月份保留
+    const bookSh = ss.getSheetByName(SH.BOOK);
+    const have = {};
+    months.forEach(m => { have[m.id] = 1; });
+    const old = bookSh.getDataRange().getValues();
+    const keep = old.slice(1).filter(r => { const d = normDate_(r[0]); return d && !have[d.slice(0, 7)]; })
+      .map(r => [normDate_(r[0])].concat(r.slice(1, 6).map(String), [isDate_(r[6]) ? fmt_(r[6], 'yyyy-MM-dd HH:mm:ss') : String(r[6] || ''), String(r[7] || '')]));
+    let fresh = [];
+    months.forEach(m => { const b = m.data.b || {}; Object.keys(b).forEach(k => { const x = b[k]; fresh.push([x.d, x.e, x.n, x.r, x.st, x.t, x.at || '', x.by || '']); }); });
+    const rows = keep.concat(fresh).sort((a, c) => (a[0] + a[6] + a[1]).localeCompare(c[0] + c[6] + c[1]));
+    fsWriteSheet_(bookSh, [old[0] && old[0].length ? old[0].slice(0, 8) : ['日期', 'Email', '姓名', '職位', '門市', '類型', '建立時間', '建立者']].concat(rows));
+    bumpVer_(null); clearStaffCache_();
+    const msg = '已從 Firestore 匯出到試算表：劃假紀錄 ' + fresh.length + ' 筆' + (skipped.length ? '；「' + skipped.join('、') + '」在試算表改過還沒同步，這次先跳過（要以試算表為準，請先按「試算表 → Firestore」）' : '');
+    log_({ email: by || 'system', name: '同步' }, 'Firestore → 試算表', msg);
+    return msg;
+  } finally { lock.releaseLock(); }
+}
+
+/* ---- 試算表 → Firestore（手動） ----
+ * withBookings=false：只同步設定類（名額、公休、設定、人員…），Firestore 上的劃假紀錄保留，名額重算。開放中也可以用。
+ * withBookings=true：連劃假紀錄一起以試算表為準覆蓋，只能在「手動暫停」時用，避免蓋掉同仁剛劃的假。
+ * 劃假狀態（依預約／手動開放／手動暫停）一律維持 Firestore 目前的狀態，不會被試算表蓋掉。
+ */
+function pushSettingsToFirestore(by) { return fsPush_(false, by); }
+function pushAllToFirestore(by) { return fsPush_(true, by); }
+function fsPush_(withBookings, by) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) throw new Error('系統忙碌中，請過一下再試');
+  try {
+    let cur = fsGetDoc_('cfg/main');
+    if (!cur) return fsSyncAll_(false);
+    const fsMode = (cur.data.window && cur.data.window.mode) || '自動';
+    if (withBookings && fsMode !== '暫停') throw new Error('要連劃假紀錄一起同步，請先在管理後台按「手動暫停」，同步完再開放');
+    fsSetSheetValue_('劃假狀態', fsMode);
+    for (let attempt = 0; attempt < 4; attempt++) {
+      fsReset_();
+      const s = getSettings_();
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const tables = {};
+      FS_TABLES_().forEach(n => { const sh = ss.getSheetByName(n); tables[n] = JSON.stringify(sh ? packVals_(sh.getDataRange().getValues()) : [[]]); });
+      const fsMonths = fsListMonths_();
+      const byId = {};
+      fsMonths.forEach(m => { byId[m.id] = m; });
+      const sheetB = {};
+      let bookCount = 0;
+      if (withBookings) {
+        const rows = ss.getSheetByName(SH.BOOK).getDataRange().getValues().slice(1);
+        rows.forEach(r => { const x = fsEntry_(r); if (!x.d || !x.e) return; const m = x.d.slice(0, 7); (sheetB[m] = sheetB[m] || {})[x.d + '_' + x.e] = x; bookCount++; });
+      }
+      const list = (s.months || []).concat(Object.keys(byId), Object.keys(sheetB)).filter((m, i, a) => m && a.indexOf(m) === i).sort();
+      const pub = Date.now();
+      const cfg = Object.assign({ tables: tables, staffSrc: JSON.stringify(staffSrcRows_(s)), pub: pub, fsVersion: FS_VERSION_ }, fsDerived_(s));
+      const writes = [fsUpdate_('cfg/main', cfg)];
+      list.forEach(m => {
+        const src = withBookings ? (sheetB[m] || {}) : ((byId[m] && byId[m].data.b) || {});
+        const b = JSON.parse(JSON.stringify(src));
+        fsReset_();
+        const pools = fsPools_(m, fsCombos_(b));
+        Object.keys(b).forEach(k => { b[k].sl = pools.pm[b[k].d + '|' + b[k].r + '|' + b[k].st] || ''; });
+        const w = fsUpdate_('months/' + m, { b: b, pm: pools.pm, q: pools.q, c: fsCount_(b, pools.pm), pub: pub, last: { k: '', s: '', op: 'admin' } });
+        // 讀取之後如果有同仁剛好劃假，這次寫入會失敗，重新讀一次再來
+        w.currentDocument = byId[m] ? { updateTime: byId[m].updateTime } : { exists: false };
+        writes.push(w);
+      });
+      const r = fsCommitTry_(writes);
+      if (r === 'conflict') { Utilities.sleep(800); continue; }
+      fsClearDirty_();
+      const msg = '已從試算表同步到 Firestore：' + (withBookings ? '設定＋劃假紀錄 ' + bookCount + ' 筆' : '設定（劃假紀錄維持 Firestore 上的）') + '・月份 ' + list.join(', ');
+      log_({ email: by || 'system', name: '同步' }, '試算表 → Firestore', msg);
+      return msg;
+    }
+    throw new Error('同仁一直在劃假，同步沒辦法完成，請先手動暫停再試');
+  } finally { lock.releaseLock(); }
+}
+
+/** Firestore 版管理後台按的同步按鈕：確認是管理員才執行 */
+function fsSyncByAdmin_(fbToken, op) {
+  const email = fsVerifyFirebaseToken_(fbToken);
+  const cur = fsGetDoc_('cfg/main');
+  const admins = cur ? (cur.data.admins || []) : [];
+  if (email !== 'xemepark@gmail.com' && admins.indexOf(email) < 0) fail_('只有管理員可以同步', 'NOT_ADMIN');
+  let message;
+  try {
+    if (op === 'pull') message = pullFromFirestore(email);
+    else if (op === 'push') message = pushSettingsToFirestore(email);
+    else if (op === 'pushAll') message = pushAllToFirestore(email);
+    else fail_('未知的同步方式', 'BAD_REQUEST');
+  } catch (e) {
+    if (e.code) throw e;
+    fail_(e.message || String(e), 'SYNC');
+  }
+  return { ok: true, message: message };
+}
+/** Firebase 網頁設定裡的 apiKey（公開資訊），直接從 Firestore 版網站讀，不寫死在程式裡 */
+function fsApiKey_() {
+  const c = CacheService.getScriptCache();
+  let k = c.get('fsApiKey');
+  if (!k) {
+    const t = UrlFetchApp.fetch('https://xemepark.github.io/smallday-leave/fs/firebase-config.js', { muteHttpExceptions: true }).getContentText();
+    const m = t.match(/apiKey["']?\s*:\s*["']([^"']+)["']/);
+    if (!m) throw new Error('讀不到 Firebase 設定');
+    k = m[1];
+    c.put('fsApiKey', k, 21600);
+  }
+  return k;
+}
+function fsVerifyFirebaseToken_(tok) {
+  if (!tok) fail_('請重新登入', 'AUTH');
+  const res = UrlFetchApp.fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + fsApiKey_(),
+    { method: 'post', contentType: 'application/json', payload: JSON.stringify({ idToken: tok }), muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) fail_('登入已過期，請重新登入', 'AUTH');
+  const u = (JSON.parse(res.getContentText()).users || [])[0];
+  if (!u || !u.email || u.emailVerified !== true) fail_('請重新登入', 'AUTH');
+  return normEmail_(u.email);
+}
+
+/* ---- 記下試算表哪些工作表手動改過（onEdit） ---- */
+function fsMarkDirty_(name) {
+  if (!name || FS_TABLES_().indexOf(name) < 0) return;
+  try { PropertiesService.getScriptProperties().setProperty('fsDirty_' + name, String(Date.now())); } catch (e) {}
+}
+function fsDirty_() {
+  const out = {};
+  try {
+    const p = PropertiesService.getScriptProperties().getProperties();
+    Object.keys(p).forEach(k => { if (k.indexOf('fsDirty_') === 0) out[k.slice(8)] = Number(p[k]); });
+  } catch (e) {}
+  return out;
+}
+function fsClearDirty_() {
+  try { const ps = PropertiesService.getScriptProperties(); Object.keys(fsDirty_()).forEach(n => ps.deleteProperty('fsDirty_' + n)); } catch (e) {}
+}
+function fsSetSheetValue_(key, value) {
+  const sh = sheet_(SH.SETTINGS);
+  const values = sh.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) if (String(values[i][0]).trim() === key) { if (String(values[i][1]) !== String(value)) sh.getRange(i + 1, 2).setValue(value); return; }
+  sh.appendRow([key, value, key === '劃假狀態' ? MODE_DESC_ : '']);
+}
+function fsWriteSheet_(sh, rows) {
+  if (!sh) return;
+  const w = Math.max(1, ...rows.map(r => r.length));
+  const data = rows.map(r => { const x = r.slice(); while (x.length < w) x.push(''); return x; });
+  sh.clearContents();
+  if (data.length) sh.getRange(1, 1, data.length, w).setValues(data);
+}
+
+function fsReset_() { for (const k in MEMO_) delete MEMO_[k]; FRESH_ = true; }
+
+function fsDerived_(s) {
+  const staffMap = {};
+  (getStaff_() || []).forEach(p => { staffMap[normEmail_(p.email)] = { role: p.role, store: p.store, active: true, name: p.name }; });
+  const admins = (s.admins || []).slice();
+  if (s.owner && admins.indexOf(s.owner) < 0) admins.push(s.owner);
+  return {
+    admins: admins, staffMap: staffMap, owner: s.owner || '',
+    window: { mode: s.mode, openMs: s.openAt ? s.openAt.getTime() : 0, closeMs: s.closeAt ? s.closeAt.getTime() : 0, months: s.months || [] }
+  };
+}
+
+function fsEntry_(r) {
+  const at = isDate_(r[6]) ? fmt_(r[6], 'yyyy-MM-dd HH:mm:ss') : String(r[6] || '');
+  return { d: normDate_(r[0]), e: normEmail_(r[1]), n: String(r[2] || ''), r: String(r[3] || ''), st: String(r[4] || ''),
+    t: String(r[5] || ''), at: at, by: normEmail_(r[7]) };
+}
+
+/** 跟 Firestore 版 engine-core.js 的 computePools 一樣：每天 × 職務 × 門市 → 名額池、名額 */
+function fsPools_(month, combos) {
+  const ctx = readContext_(month);
+  const pm = {}, q = {};
+  monthDays_(month).forEach(day => {
+    const date = day.date || day;
+    combos.forEach(rs => {
+      const role = rs[0], store = rs[1];
+      const slot = slot_(ctx, { role: role, store: store }, date);
+      const k = slot.unlimited ? date + '|' + role + '|' + store + '|不限' : date + '|' + role + '|' + slot.scope;
+      pm[date + '|' + role + '|' + store] = k;
+      let quota = slot.unlimited ? -1 : (slot.quota === null || slot.quota === undefined ? 0 : Number(slot.quota));
+      if (slot.holiday) quota = 0;
+      q[k] = quota;
+    });
+  });
+  return { pm: pm, q: q };
+}
+function fsCount_(b, pm) {
+  const c = {};
+  Object.keys(b).forEach(k => { const x = b[k]; const s = x.sl || pm[x.d + '|' + x.r + '|' + x.st]; if (s) c[s] = (c[s] || 0) + 1; });
+  return c;
+}
+function fsCombos_(b) {
+  const set = {};
+  (getStaff_() || []).forEach(p => { if (p.role && p.store) set[p.role + '|' + p.store] = [p.role, p.store]; });
+  Object.keys(b).forEach(k => { const x = b[k]; if (x.r && x.st) set[x.r + '|' + x.st] = [x.r, x.st]; });
+  return Object.keys(set).map(k => set[k]);
+}
+
+/* ---- Firestore REST ---- */
+function fsVal_(v) {
+  if (v === null || v === undefined) return { nullValue: null };
+  if (typeof v === 'boolean') return { booleanValue: v };
+  if (typeof v === 'number') return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+  if (typeof v === 'string') return { stringValue: v };
+  if (isDate_(v)) return { integerValue: String(v.getTime()) };
+  if (Array.isArray(v)) return { arrayValue: { values: v.map(fsVal_) } };
+  const f = {};
+  Object.keys(v).forEach(k => { f[k] = fsVal_(v[k]); });
+  return { mapValue: { fields: f } };
+}
+function fsUpdate_(path, obj, mask) {
+  const w = { update: { name: 'projects/' + FS_PROJECT + '/databases/(default)/documents/' + path, fields: fsVal_(obj).mapValue.fields } };
+  if (mask) w.updateMask = { fieldPaths: mask };
+  return w;
+}
+function fsFetch_(url, opt) {
+  opt = Object.assign({ muteHttpExceptions: true, headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'X-Goog-User-Project': FS_PROJECT } }, opt || {});
+  const res = UrlFetchApp.fetch(url, opt);
+  return { code: res.getResponseCode(), text: res.getContentText() };
+}
+function fsGet_(path) {
+  const r = fsFetch_(FS_BASE_ + '/' + path);
+  if (r.code === 404) return null;
+  if (r.code !== 200) throw new Error('讀取 Firestore 失敗（' + r.code + '）：' + r.text.slice(0, 300));
+  return JSON.parse(r.text);
+}
+function fsDec_(v) {
+  if (!v || 'nullValue' in v) return null;
+  if ('booleanValue' in v) return v.booleanValue;
+  if ('integerValue' in v) return Number(v.integerValue);
+  if ('doubleValue' in v) return v.doubleValue;
+  if ('stringValue' in v) return v.stringValue;
+  if ('timestampValue' in v) return v.timestampValue;
+  if ('arrayValue' in v) return (v.arrayValue.values || []).map(fsDec_);
+  if ('mapValue' in v) { const o = {}; const f = v.mapValue.fields || {}; Object.keys(f).forEach(k => { o[k] = fsDec_(f[k]); }); return o; }
+  return null;
+}
+function fsGetDoc_(path) {
+  const d = fsGet_(path);
+  return d ? { data: fsDec_({ mapValue: { fields: d.fields || {} } }), updateTime: d.updateTime } : null;
+}
+function fsListMonths_() {
+  const out = [];
+  let token = '';
+  do {
+    const r = fsFetch_(FS_BASE_ + '/months?pageSize=100' + (token ? '&pageToken=' + encodeURIComponent(token) : ''));
+    if (r.code !== 200) throw new Error('讀取 Firestore 失敗（' + r.code + '）：' + r.text.slice(0, 300));
+    const j = JSON.parse(r.text);
+    (j.documents || []).forEach(d => { out.push({ id: d.name.split('/').pop(), data: fsDec_({ mapValue: { fields: d.fields || {} } }), updateTime: d.updateTime }); });
+    token = j.nextPageToken || '';
+  } while (token);
+  return out;
+}
+/** 一次寫入全部（全部成功或全部不寫）；有人剛好改了同一份文件就回 'conflict' */
+function fsCommitTry_(writes) {
+  const r = fsFetch_(FS_BASE_ + ':commit', { method: 'post', contentType: 'application/json', payload: JSON.stringify({ writes: writes }) });
+  if (r.code === 200) return 'ok';
+  if (r.code === 400 || r.code === 409 || r.code === 412) {
+    if (/FAILED_PRECONDITION|ABORTED|precondition|already exists|ALREADY_EXISTS/i.test(r.text)) return 'conflict';
+  }
+  throw new Error('寫入 Firestore 失敗（' + r.code + '）：' + r.text.slice(0, 300));
+}
+function fsCommit_(writes) {
+  for (let i = 0; i < writes.length; i += 400) {
+    const r = fsFetch_(FS_BASE_ + ':commit', { method: 'post', contentType: 'application/json', payload: JSON.stringify({ writes: writes.slice(i, i + 400) }) });
+    if (r.code !== 200) throw new Error('寫入 Firestore 失敗（' + r.code + '）：' + r.text.slice(0, 300));
+  }
 }
 
 /* ============================== 讀取快取（v2.3.0） ==============================
@@ -1354,6 +1783,7 @@ function onEdit(e) {
   try {
     const n = e && e.range ? e.range.getSheet().getName() : '';
     bumpVer_(n ? [n] : null);
+    fsMarkDirty_(n);
     if (!n || [SH.STAFF, SH.DEPT, SH.TITLE, SH.SETTINGS].indexOf(n) >= 0) clearStaffCache_();
   } catch (err) {}
 }
