@@ -96,6 +96,8 @@
   .seg button+button{border-left:1px solid var(--line)}
   .seg button.on{background:var(--ink);color:#fff}
   .seg button.ask{background:var(--accent);color:#fff}
+  .seg3{display:flex;width:100%}
+  .seg3 button{flex:1;padding:10px 6px;font-size:14px}
   .syncbox{flex-basis:100%;border-top:1px dashed var(--line);padding-top:8px;font-size:13px}
   .syncbox summary{cursor:pointer;color:var(--sub)}
   .syncrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
@@ -269,9 +271,7 @@
 
     <div class="modebar" id="modeBar">
       <div class="mstate" id="modeState"><i></i><div><b id="modeTitle"></b><small id="modeSub"></small></div></div>
-      <div class="seg" id="modeSeg">
-        <button type="button" data-m="自動">依預約時間</button><button type="button" data-m="開放">手動開放</button><button type="button" data-m="暫停">手動暫停</button>
-      </div>
+      <div class="seg"><button type="button" id="modeEdit">切換開放／暫停</button></div>
       <details class="syncbox" id="syncBox">
         <summary>跟 Google 試算表同步</summary>
         <div class="syncrow">
@@ -357,6 +357,14 @@
 <div id="setPanel" class="modal" role="dialog" aria-modal="true">
   <h2>系統設定</h2>
   <div class="meta">改完按儲存，員工畫面最多 15 秒就會更新</div>
+
+  <div class="field">
+    <label>劃假狀態</label>
+    <div class="seg seg3" id="sMode">
+      <button type="button" data-m="自動">依預約時間</button><button type="button" data-m="開放">手動開放</button><button type="button" data-m="暫停">手動暫停</button>
+    </div>
+    <div class="subnote" id="sModeNote"></div>
+  </div>
 
   <div class="field">
     <label>開放劃假的月份</label>
@@ -1262,11 +1270,18 @@ function renderMode(c){
   else if (st === 'open'){ title = '開放中（依預約時間）'; sub = c.closeAt + ' 自動結束'; }
   else if (st === 'before'){ title = '尚未開放（依預約時間）'; sub = c.openAt + ' 自動開放'; }
   else if (st === 'closed'){ title = '已結束（依預約時間）'; sub = c.closeAt + ' 已自動結束'; }
-  else { title = '還沒設定預約時間'; sub = '到「系統設定」填預約開放／結束時間，或直接手動開放'; }
+  else { title = '還沒設定預約時間'; sub = '按右邊「切換開放／暫停」設定'; }
   box.className = 'mstate ' + (mode === '開放' ? 'open' : mode === '暫停' ? 'paused' : st);
   $('#modeTitle').textContent = title; $('#modeSub').textContent = sub;
-  state.modeAsk = null;
-  document.querySelectorAll('#modeSeg button').forEach(b => { b.classList.toggle('on', b.dataset.m === mode); b.classList.remove('ask'); b.textContent = MODE_LABEL[b.dataset.m]; });
+}
+const MODE_NOTE = {
+  '自動': '時間到自動開放、自動結束（下面的預約時間要填好）',
+  '開放': '馬上開放，一直開著直到你改回來；預約時間暫不生效',
+  '暫停': '馬上鎖住，同仁只能查看、不能劃假或取消；管理員照樣可以排'
+};
+function paintSMode(){
+  document.querySelectorAll('#sMode button').forEach(b => b.classList.toggle('on', b.dataset.m === state.sMode));
+  $('#sModeNote').textContent = MODE_NOTE[state.sMode] || '';
 }
 const MODE_LABEL = { '自動': '依預約時間', '開放': '手動開放', '暫停': '手動暫停' };
 async function setMode(m){
@@ -1324,6 +1339,7 @@ function openSettings(){
   const cnt = $('#sCount'); cnt.textContent = '';
   for (let i = 1; i <= 6; i++){ const o = el('option', '', i + ' 個月'); o.value = i; cnt.appendChild(o); }
   cnt.value = Math.min(6, c.monthCount || 1);
+  state.sMode = c.mode || '自動'; paintSMode();
   $('#sOpen').value = toLocalInput(c.openAt);
   $('#sClose').value = toLocalInput(c.closeAt);
   $('#sLeave').value = c.monthOff; $('#sWeekend').value = c.maxWeekend; $('#sConsec').value = c.maxConsecutive;
@@ -1365,6 +1381,7 @@ async function saveSettings(){
   if (state.busy) return;
   const settings = {
     startMonth: $('#sStart').value, monthCount: Number($('#sCount').value),
+    mode: state.sMode || '自動',
     openAt: fromLocalInput($('#sOpen').value), closeAt: fromLocalInput($('#sClose').value),
     monthOff: Number($('#sLeave').value), maxWeekend: Number($('#sWeekend').value), maxConsecutive: Number($('#sConsec').value),
     roleLeave: Object.fromEntries(Object.keys(state.rl).filter(r => state.rl[r].on).map(r => [r, { self: state.rl[r].self, mgr: state.rl[r].mgr }]))
@@ -1432,7 +1449,8 @@ $('#aClose').onclick = closePanel;
 $('#sStart').onchange = updatePreview;
 $('#sCount').onchange = updatePreview;
 $('#sSave').onclick = saveSettings;
-document.querySelectorAll('#modeSeg button').forEach(b => { b.onclick = () => setMode(b.dataset.m); });
+$('#modeEdit').onclick = () => openSettings();
+document.querySelectorAll('#sMode button').forEach(b => { b.onclick = () => { state.sMode = b.dataset.m; paintSMode(); }; });
 document.querySelectorAll('#syncBox button').forEach(b => { b.onclick = () => runSync(b.dataset.op, b); });
 $('#sLeave').oninput = () => { if (state.rl) renderRoleLeave(); };
 $('#sCancel').onclick = closePanel;
