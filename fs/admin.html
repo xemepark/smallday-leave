@@ -250,7 +250,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s .8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
-<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261127c';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261127d';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 <div class="wrap">
@@ -750,6 +750,7 @@ function render(d){
   const isOwner = d.role === 'owner';
   $('#roleBadge').textContent = isOwner ? '系統擁有者' : '管理員';
   $('#roleBadge').className = 'badge' + (isOwner ? ' owner' : '');
+  $('#syncBox').hidden = !isOwner;   // 跟試算表同步：只有系統擁有者看得到
   if ($('#adminPanel').classList.contains('show')) fillAdmins();
   const [y, m] = d.month.split('-');
   $('#monthLabel').textContent = y + ' 年 ' + Number(m) + ' 月';
@@ -1306,7 +1307,7 @@ async function setMode(m){
 const SYNC_LABEL = { pull: 'Firestore → 試算表', push: '試算表 → Firestore（只有設定）', pushAll: '試算表 → Firestore（含劃假紀錄）' };
 async function runSync(op, btn){
   const c = state.data && state.data.config;
-  if (state.busy || !c) return;
+  if (state.busy || !c || state.data.role !== 'owner') return;
   if (op === 'pushAll' && c.mode !== '暫停'){ toast('要連劃假紀錄一起同步，請先按上面的「手動暫停」', true); return; }
   if (state.syncAsk !== op){
     state.syncAsk = op;

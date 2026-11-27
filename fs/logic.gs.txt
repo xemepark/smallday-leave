@@ -1526,8 +1526,8 @@ function fsPush_(withBookings, by) {
 function fsSyncByAdmin_(fbToken, op) {
   const email = fsVerifyFirebaseToken_(fbToken);
   const cur = fsGetDoc_('cfg/main');
-  const admins = cur ? (cur.data.admins || []) : [];
-  if (email !== 'xemepark@gmail.com' && admins.indexOf(email) < 0) fail_('只有管理員可以同步', 'NOT_ADMIN');
+  const owner = normEmail_((cur && cur.data.owner) || 'xemepark@gmail.com');
+  if (email !== owner) fail_('只有系統擁有者可以跟試算表同步', 'NOT_OWNER');
   let message;
   try {
     if (op === 'pull') message = pullFromFirestore(email);
