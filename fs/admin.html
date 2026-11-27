@@ -250,6 +250,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s .8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261127c';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 <div class="wrap">
@@ -271,7 +272,7 @@
 
     <div class="modebar" id="modeBar">
       <div class="mstate" id="modeState"><i></i><div><b id="modeTitle"></b><small id="modeSub"></small></div></div>
-      <div class="seg"><button type="button" id="modeEdit">切換開放／暫停</button></div>
+      <div class="seg"><button type="button" id="modeEdit">到系統設定切換</button></div>
       <details class="syncbox" id="syncBox">
         <summary>跟 Google 試算表同步</summary>
         <div class="syncrow">
@@ -359,14 +360,6 @@
   <div class="meta">改完按儲存，員工畫面最多 15 秒就會更新</div>
 
   <div class="field">
-    <label>劃假狀態</label>
-    <div class="seg seg3" id="sMode">
-      <button type="button" data-m="自動">依預約時間</button><button type="button" data-m="開放">手動開放</button><button type="button" data-m="暫停">手動暫停</button>
-    </div>
-    <div class="subnote" id="sModeNote"></div>
-  </div>
-
-  <div class="field">
     <label>開放劃假的月份</label>
     <div class="grid2">
       <div><select class="text" id="sStart"></select><div class="subnote">從哪個月開始</div></div>
@@ -382,6 +375,15 @@
       <div><input class="text" type="datetime-local" id="sClose"><div class="subnote">自動結束</div></div>
     </div>
     <div class="subnote">手動開放或手動暫停時，可以留白；切回「依預約時間」前要填好。</div>
+  </div>
+
+  <div class="field">
+    <label>劃假狀態</label>
+    <div class="mstate" id="sModeNow"><i></i><div><b></b><small></small></div></div>
+    <div class="seg seg3" id="sMode" style="margin-top:8px">
+      <button type="button" data-m="自動">依預約時間</button><button type="button" data-m="開放">手動開放</button><button type="button" data-m="暫停">手動暫停</button>
+    </div>
+    <div class="subnote" id="sModeNote"></div>
   </div>
 
   <div class="field">
@@ -1273,6 +1275,8 @@ function renderMode(c){
   else { title = '還沒設定預約時間'; sub = '按右邊「切換開放／暫停」設定'; }
   box.className = 'mstate ' + (mode === '開放' ? 'open' : mode === '暫停' ? 'paused' : st);
   $('#modeTitle').textContent = title; $('#modeSub').textContent = sub;
+  const now = $('#sModeNow');
+  if (now){ now.className = box.className; now.querySelector('b').textContent = '目前：' + title; now.querySelector('small').textContent = sub; }
 }
 const MODE_NOTE = {
   '自動': '時間到自動開放、自動結束（下面的預約時間要填好）',
