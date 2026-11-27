@@ -13,7 +13,7 @@
 (function () {
   'use strict';
   const C = window.LeaveCore;
-  const FS_VERSION = '1.1.0';
+  const FS_VERSION = '1.1.1';
   const OWNER = 'xemepark@gmail.com';
   const BOOK_HEADER = ['日期', 'Email', '姓名', '職位', '門市', '類型', '建立時間', '建立者'];
   const LOG_HEADER = ['時間', 'Email', '姓名', '動作', '內容'];
@@ -29,8 +29,16 @@
   const months = {};            // yyyy-MM → 月份文件
   let authUser;                 // undefined＝還不知道，null＝沒登入
   let readyResolve;
-  const ready = new Promise(r => { readyResolve = r; });
+  let ready = new Promise(r => { readyResolve = r; });
   let gotCfg = false, gotMonths = false, unsubs = [];
+  // 換帳號或重新登入時，整個重新讀一次（不沿用上一次的錯誤）
+  function restart() {
+    unsubs.forEach(u => u()); unsubs = [];
+    ready = new Promise(r => { readyResolve = r; });
+    gotCfg = false; gotMonths = false; readyErr = null; cfg = null;
+    Object.keys(months).forEach(k => delete months[k]);
+    listen();
+  }
 
   const authEmail = () => (auth.currentUser && auth.currentUser.email ? auth.currentUser.email.toLowerCase() : '');
 
@@ -83,7 +91,7 @@
   }
   let readyErr = null;
   function checkReady(err) {
-    if (err) readyErr = err;
+    if (err) { readyErr = err; console.warn('[fs] 讀取失敗', err.code, err.message); }
     if (gotCfg && gotMonths) readyResolve();
   }
 
@@ -253,6 +261,7 @@
     if (authUser === undefined) await new Promise(r => { const u = auth.onAuthStateChanged(x => { u(); r(); }); });
     if (!auth.currentUser) return err('請先登入', 'AUTH');
     await ready;
+    if (readyErr) { restart(); await ready; }   // 失敗就重讀一次（例如剛登入、權杖還沒生效）
     if (readyErr && readyErr.code === 'permission-denied') return err('這個帳號（' + authEmail() + '）不在人員名單裡，請洽主管', 'NOT_STAFF');
     if (!cfg) return err('Firestore 版還沒匯入資料，請洽系統擁有者', 'SETUP');
     const a = body.action;
@@ -311,14 +320,14 @@
     disableAutoSelect() { if (!cfg && authEmail() === OWNER) return; auth.signOut().catch(() => {}); }
   } } };
 
-  let started = false;
+  let lastUid = null;
   auth.onAuthStateChanged(async user => {
     authUser = user || null;
-    if (!user) return;
-    if (!started) {
-      started = true;
+    if (!user) { lastUid = null; unsubs.forEach(u => u()); unsubs = []; return; }
+    if (user.uid !== lastUid) {
+      lastUid = user.uid;
       if (!G) await loadCode();
-      listen();
+      restart();
     }
     if (cb) cb({ credential: fakeToken(authEmail()) });
   });
