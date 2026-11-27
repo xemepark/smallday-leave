@@ -552,13 +552,13 @@ window.addEventListener('hashchange', () => { if (state.me) applyHash(); });
 const NAV = [
   { id: 'leave',    label: '我的劃假', href: 'index.html',         show: me => me.staff },
   { id: 'roster',   label: '排休總表', href: 'admin.html#roster',   show: me => me.admin },
-  { id: 'dispatch', label: '派工',     href: 'dispatch.html',       show: me => me.admin },
+  { id: 'dispatch', label: '派工',     href: '../dispatch.html',       show: me => me.admin },
   { id: 'quota',    label: '名額設定', href: 'admin.html#quota',    show: me => me.admin },
   { id: 'rules',    label: '職務名額', href: 'admin.html#rules',    show: me => me.admin },
   { id: 'settings', label: '系統設定', href: 'admin.html#settings', show: me => me.admin },
   { id: 'admins',   label: '管理員',   href: 'admin.html#admins',   show: me => me.owner },
   { id: 'dperm',    label: '派工權限', href: 'admin.html#dperm',    show: me => me.admin },
-  { id: 'schedule', label: '班表',     href: 'dispatch.html',       show: me => !me.admin && !!me.dispatchRole }
+  { id: 'schedule', label: '班表',     href: '../dispatch.html',       show: me => !me.admin && !!me.dispatchRole }
 ];
 // 不是管理員的人，問派工系統有沒有開放看班表；有的話選單多一個「班表」
 const DISPATCH_API = 'https://script.google.com/macros/s/AKfycbwabey942q1fUpPhaeaFng1AD1jsBWvddG8vOhEJ1AhImsW9vnN8wOVJBk7T5W3zVoR_g/exec';
