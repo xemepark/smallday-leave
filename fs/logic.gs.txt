@@ -1088,7 +1088,16 @@ function loadStaffAll_() {
   if (hit) { MEMO_.staff = JSON.parse(hit); return MEMO_.staff; }
   const s = getSettings_();
   const list = s.staffSource ? readStaffSource_(s) : [];
-  rows_(SH.STAFF).forEach(r => {
+  applyStaffRows_(list, rows_(SH.STAFF));
+  // 人員名單要開另一份試算表，比較慢：放 10 分鐘；管理員修改或改到人員相關的表會立刻清掉
+  try { cachePutBig_('staff_v3', JSON.stringify(list), 600); } catch (e) {}
+  MEMO_.staff = list;
+  return list;
+}
+
+/** 「人員」表是手動調整（改名、改職位門市、停用、加外部人員），蓋在員工資料同步來的名單上 */
+function applyStaffRows_(list, rows) {
+  rows.forEach(r => {
     const email = normEmail_(r[0]);
     const name = String(r[1]).trim();
     if (!email && !name) return;
@@ -1109,9 +1118,6 @@ function loadStaffAll_() {
     if (off) p.enabled = false;
     else if (on) p.enabled = true;
   });
-  // 人員名單要開另一份試算表，比較慢：放 10 分鐘；管理員修改或改到人員相關的表會立刻清掉
-  try { cachePutBig_('staff_v3', JSON.stringify(list), 600); } catch (e) {}
-  MEMO_.staff = list;
   return list;
 }
 
@@ -1399,10 +1405,15 @@ function fsSyncAll_(force) {
 function syncStaffToFirestore() {
   fsReset_();
   const s = getSettings_();
-  if (!fsGet_('cfg/main')) throw new Error('Firestore 版還沒有資料，請先執行 syncAllToFirestore');
-  const d = fsDerived_(s);
-  fsCommit_([fsUpdate_('cfg/main', { staffSrc: JSON.stringify(staffSrcRows_(s)), staffMap: d.staffMap }, ['staffSrc', 'staffMap'])]);
-  const msg = '已更新 Firestore 人員名單：' + Object.keys(d.staffMap).length + ' 位';
+  const cur = fsGetDoc_('cfg/main');
+  if (!cur) throw new Error('Firestore 版還沒有資料，請先執行 syncAllToFirestore');
+  const fsRows = cur.data.tables && cur.data.tables[SH.STAFF] ? unpackVals_(JSON.parse(cur.data.tables[SH.STAFF])).slice(1) : [];
+  const list = applyStaffRows_(s.staffSource ? readStaffSource_(s) : [], fsRows)
+    .filter(p => p.email && p.enabled && p.role && p.store);
+  const staffMap = {};
+  list.forEach(p => { staffMap[normEmail_(p.email)] = { role: p.role, store: p.store, active: true, name: p.name }; });
+  fsCommit_([fsUpdate_('cfg/main', { staffSrc: JSON.stringify(staffSrcRows_(s)), staffMap: staffMap }, ['staffSrc', 'staffMap'])]);
+  const msg = '已更新 Firestore 人員名單：' + Object.keys(staffMap).length + ' 位';
   Logger.log(msg);
   return msg;
 }
