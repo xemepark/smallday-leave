@@ -1,0 +1,1599 @@
+/**
+ * 小日子寫真館｜劃假系統 後端（Google Apps Script，綁定在試算表上）
+ * 版本：v2.2.0（每月休假天數、各職務自排／公排天數）
+ *
+ * 部署方式：部署 → 新增部署作業 → 網頁應用程式
+ *   執行身分：我
+ *   存取權：所有人
+ * 身分驗證：前端用 Google 登入取得 ID Token，後端向 Google 驗證後比對「人員」表的 Email，
+ *           所以只能劃自己的假，不能代填。
+ */
+
+const VERSION = '2.3.5';
+const TZ = 'Asia/Taipei';
+const SH = {
+  SETTINGS: '設定',
+  STAFF: '人員',
+  QUOTA: '名額規則',
+  OVERRIDE: '日期覆寫',
+  BOOK: '劃假紀錄',
+  LOG: '操作紀錄',
+  DEPT: '部門對照',
+  TITLE: '職稱對照',
+  HOLIDAY: '公休日'
+};
+// 沒有對照表時用的預設值
+const DEFAULT_DEPT = { '台北店': '台北', '中壢店': '中壢', '竹北店': '竹北', '台中店': '台中', '楊梅店': '楊梅',
+  '攝影部': '楊梅', '客服部': '楊梅', '業務部': '楊梅', '經理室': '', '經理部': '', '會計部': '', '行銷部': '' };
+const DEFAULT_TITLE = [['攝影師', '攝影師'], ['安撫師', '安撫師'], ['攝助', '攝助'], ['助理', '攝助'],
+  ['業務', '業務'], ['客服', '客服'], ['排版', '排版'], ['美編', '排版']];
+const LEAVE = '自排';   // 同仁自己挑的（每月上限、週末上限都算這種）
+const MGR = '公排';     // 主管排的，不算進同仁每月可自選的天數
+/** 舊名稱自動換成新名稱 */
+function normType_(t) {
+  t = String(t || '').trim();
+  if (!t || t === '休假' || t === '同仁排休') return LEAVE;
+  if (t === '可休' || t === '公司排休') return MGR;
+  return t;
+}
+const ALL_ROLES = ['攝影師', '安撫師', '攝助', '業務', '客服', '排版'];
+
+/* ============================== 入口 ============================== */
+
+function doGet() {
+  return json_({ ok: true, app: '小日子劃假系統', version: VERSION });
+}
+
+/* 只讀的動作可以用快取；其他會寫入的動作一律讀最新資料，做完把快取版本往前推 */
+const READ_ACTIONS = ['whoami', 'load', 'adminLoad', 'adminRoster'];
+const WRITE_ACTIONS = ['book', 'cancel', 'adminSet', 'adminSaveSettings', 'adminSetAdmins', 'adminSetLeave', 'adminSetDay', 'adminSaveRules'];
+
+function doPost(e) {
+  for (const k in MEMO_) delete MEMO_[k];
+  let action = '';
+  try {
+    action = JSON.parse((e && e.postData && e.postData.contents) || '{}').action || '';
+  } catch (err) {}
+  // 劃假、取消、代排：只有「劃假紀錄」一定要讀最新（名額檢查），其他設定類的表照樣用快取
+  // 其他會改設定的管理動作：全部讀最新
+  FRESH_ = READ_ACTIONS.indexOf(action) >= 0 ? false : (['book', 'cancel', 'adminSetLeave'].indexOf(action) >= 0 ? 'book' : 'all');
+  BUMPED_ = false;
+  T0_ = Date.now(); TIMES_.length = 0;
+  try {
+    return doPostInner_(e);
+  } finally {
+    if (WRITE_ACTIONS.indexOf(action) >= 0 && !BUMPED_) {
+      // 劃假、取消、代排只動到劃假紀錄，其他工作表的快取不用丟
+      bumpVer_(['book', 'cancel', 'adminSetLeave'].indexOf(action) >= 0 ? [SH.BOOK] : null);
+    }
+    // 只有系統設定可能改到人員資料來源，才需要重讀人員名單（重讀要開另一份試算表，很慢）
+    if (action === 'adminSaveSettings') clearStaffCache_();
+  }
+}
+
+function doPostInner_(e) {
+  let req;
+  try {
+    req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+  } catch (err) {
+    return json_({ ok: false, error: '請求格式錯誤', code: 'BAD_REQUEST' });
+  }
+  try {
+    if (req.action === 'whoami') return json_(whoami_(req.idToken));
+    if (String(req.action || '').indexOf('admin') === 0) {
+      const admin = verifyAdmin_(req.idToken);
+      switch (req.action) {
+        case 'adminLoad':
+          return json_(adminView_(admin, req.month));
+        case 'adminSet':
+          return json_(adminSet_(admin, req));
+        case 'adminSaveSettings':
+          return json_(adminSaveSettings_(admin, req.settings || {}));
+        case 'adminSetAdmins':
+          return json_(adminSetAdmins_(admin, req.admins));
+        case 'adminRoster':
+          return json_(adminRoster_(admin, req.month));
+        case 'adminSetLeave':
+          return json_(adminSetLeave_(admin, req));
+        case 'adminSetDay':
+          return json_(adminSetDay_(admin, req));
+        case 'adminSaveRules':
+          return json_(adminSaveRules_(admin, req));
+        default:
+          return json_({ ok: false, error: '未知的動作', code: 'BAD_REQUEST' });
+      }
+    }
+    const me = verifyUser_(req.idToken);
+    switch (req.action) {
+      case 'load': {
+        // 自動更新：資料沒變就不用重算，直接回「沒變」
+        const ver = dataVer_();
+        if (req.since && req.since === ver) return json_({ ok: true, same: true, ver: ver });
+        const view = buildView_(me, readContext_(), req.month);
+        view.ver = ver;
+        return json_(view);
+      }
+      case 'book':
+        return json_(book_(me, String(req.date || '')));
+      case 'cancel':
+        return json_(cancel_(me, String(req.date || '')));
+      default:
+        return json_({ ok: false, error: '未知的動作', code: 'BAD_REQUEST' });
+    }
+  } catch (err) {
+    return json_({ ok: false, error: err.message || String(err), code: err.code || 'ERROR' });
+  }
+}
+
+/* ============================== 劃假／取消 ============================== */
+
+function book_(me, date) {
+  assertDate_(date);
+  let bookAfter = null;
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) fail_('現在劃假的人比較多，請過幾秒再按一次', 'BUSY');
+  try {
+    // 拿到鎖之後重新讀取最新資料，不相信前端畫面上的數字
+    const ctx = readContext_();
+    const s = ctx.settings;
+    assertOpen_(s);
+    const month = date.slice(0, 7);
+    if (s.months.indexOf(month) < 0) fail_('目前只能劃 ' + s.months.join('、') + ' 的假', 'BAD_DATE');
+
+    if (ctx.holidays[date]) fail_('這天是全公司公休（' + ctx.holidays[date] + '），大家都放假，不用劃', 'HOLIDAY');
+    const mine = ctx.bookings.filter(b => b.email === me.email);
+    if (mine.some(b => b.date === date)) fail_('這天你已經有排休了', 'DUPLICATE');
+
+    // 指定假天數、週末上限都是「每個月」各自計算
+    const myLeave = mine.filter(b => b.type === LEAVE && b.date.slice(0, 7) === month);
+    const maxSelf = maxSelf_(s, me.role);
+    if (myLeave.length >= maxSelf) {
+      fail_(Number(month.slice(5)) + ' 月的自排最多 ' + maxSelf + ' 天，你已經劃滿了', 'LIMIT');
+    }
+    if (isWeekend_(date) && weekendCapped_(s, me.role)) {
+      const wk = myLeave.filter(b => isWeekend_(b.date)).length;
+      if (wk >= s.maxWeekend) {
+        fail_(Number(month.slice(5)) + ' 月的週六日最多自選 ' + s.maxWeekend + ' 天，你已經選滿了', 'LIMIT');
+      }
+    }
+
+    const slot = slot_(ctx, me, date);
+    if (!slot.unlimited) {
+      if (slot.quota === null) fail_('這天沒有設定「' + me.role + '」的名額，請洽主管', 'NO_RULE');
+      if (slot.quota <= 0) fail_('這天禁休' + (slot.note ? '（' + slot.note + '）' : ''), 'BLOCKED');
+      if (slot.used >= slot.quota) fail_('這天的名額剛剛被劃走了', 'FULL');
+    }
+
+    const run = runLength_(mine.map(b => b.date).concat([date]), date);
+    if (run > s.maxConsecutive) {
+      fail_('這樣會連休 ' + run + ' 天，超過 ' + s.maxConsecutive + ' 天需要事先取得主管同意，請洽主管', 'CONSECUTIVE');
+    }
+
+    // 不能讓這個月注定出現連續上班 7 天：剩下的休假天數要夠把每一段上班切到 6 天以內
+    const w = workCheck_(s, me.role, month, mine.filter(b => b.date.slice(0, 7) === month).map(b => b.date).concat([date]), ctx.holidays);
+    if (w.need > w.remaining) {
+      fail_('這樣排的話，' + label_(w.longestStart) + ' 起會連續上班 ' + w.longest + ' 天，剩下的 ' + w.remaining +
+        ' 天休假不夠把每段上班切到 6 天以內（不能連上 7 天），請換一天', 'WORK_STREAK');
+    }
+
+    const newRow = [date, me.email, me.name, me.role, me.store, LEAVE, nowStr_(), me.email];
+    sheet_(SH.BOOK).appendRow(newRow);
+    if (freshBookRows_()) freshBookRows_().push(newRow);
+    log_(me, '劃假', date);
+    SpreadsheetApp.flush(); // 一定要先寫進去再放開鎖
+    bookAfter = freshBookRows_();
+  } finally {
+    lock.releaseLock();
+  }
+  afterWrite_([SH.BOOK], bookAfter);
+  return Object.assign(buildView_(me, readContext_(), date.slice(0, 7)), { message: '已劃 ' + label_(date) + ' 排休' });
+}
+
+function cancel_(me, date) {
+  assertDate_(date);
+  let bookAfter = null;
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) fail_('現在劃假的人比較多，請過幾秒再按一次', 'BUSY');
+  try {
+    assertOpen_(getSettings_());
+    const sh = sheet_(SH.BOOK);
+    const values = [[]].concat(rows_(SH.BOOK));
+    let row = -1;
+    for (let i = values.length - 1; i >= 1; i--) {
+      if (normDate_(values[i][0]) === date &&
+          normEmail_(values[i][1]) === me.email &&
+          normType_(values[i][5]) === LEAVE) {
+        const by = normEmail_(values[i][7]);
+        if (by && by !== me.email) fail_('這天是主管幫你排的，要調整請洽主管', 'BY_ADMIN');
+        row = i + 1;
+        break;
+      }
+    }
+    if (row < 0) fail_('找不到你這天的排休（公排請洽主管調整）', 'NOT_FOUND');
+    sh.deleteRow(row);
+    if (freshBookRows_()) freshBookRows_().splice(row - 2, 1);
+    log_(me, '取消', date);
+    SpreadsheetApp.flush();
+    bookAfter = freshBookRows_();
+  } finally {
+    lock.releaseLock();
+  }
+  afterWrite_([SH.BOOK], bookAfter);
+  return Object.assign(buildView_(me, readContext_(), date.slice(0, 7)), { message: '已取消 ' + label_(date) + ' 排休' });
+}
+
+/* ============================== 名額計算 ============================== */
+
+/** 某人某天的名額狀況：名額、已用、誰休、備註 */
+function slot_(ctx, who, date) {
+  const dt = dayType_(date);
+  const rule = ctx.rules.find(r =>
+    r.role === who.role && r.dayType === dt &&
+    (!r.stores.length || r.stores.indexOf(who.store) >= 0)) || null;
+  const ov = pickOverride_(ctx.overrides, date, who);
+
+  // 不受名額控制的職務：沒有特別設定（例如全公司禁休）時，每天不限人數
+  if (!ov && ctx.settings && !isControlled_(ctx.settings, who.role)) {
+    const same = ctx.bookings.filter(b => b.date === date && b.role === who.role && b.store === who.store);
+    return {
+      quota: null, unlimited: true, used: same.length, scope: '不限人數', note: '', override: null,
+      holiday: (ctx.holidays && ctx.holidays[date]) || '',
+      people: same.map(b => ({ name: b.name, store: b.store, type: b.type }))
+    };
+  }
+
+  let quota = rule ? rule.quota : null;
+  let scope = who.store;
+  let inPool = b => b.store === who.store;
+  if (rule && rule.scope === '合計') {
+    inPool = b => !rule.stores.length || rule.stores.indexOf(b.store) >= 0;
+    scope = rule.stores.length ? rule.stores.join('、') + ' 合計' : '全公司合計';
+  }
+  if (ov) {
+    quota = ov.quota;
+    if (ov.store) {
+      inPool = b => b.store === who.store;
+      scope = who.store;
+    }
+  }
+
+  const people = ctx.bookings.filter(b => b.date === date && b.role === who.role && inPool(b));
+  return {
+    quota: quota,
+    unlimited: false,
+    used: people.length,
+    scope: scope,
+    note: ov ? ov.note : '',
+    override: ov ? { role: ov.role, store: ov.store } : null,
+    holiday: (ctx.holidays && ctx.holidays[date]) || '',
+    people: people.map(b => ({ name: b.name, store: b.store, type: b.type }))
+  };
+}
+
+/** 「攝影師:5:3,安撫師:5:3」→ { 攝影師: { self: 5, mgr: 3 }, … } */
+function parseRoleLeave_(v) {
+  const out = {};
+  String(v || '').split(/[,，、\n]+/).forEach(part => {
+    const m = part.trim().match(/^(.+?)[:：](\d+)[:：/](\d+)$/);
+    if (m) out[m[1].trim()] = { self: Number(m[2]), mgr: Number(m[3]) };
+  });
+  return out;
+}
+/** 這個職務每月總共放幾天假（自排＋公排；沒設定＝每月休假天數） */
+function totalOff_(s, role) {
+  return s.roleLeave[role] ? s.roleLeave[role].self + s.roleLeave[role].mgr : s.monthOff;
+}
+
+/**
+ * 檢查這個月還能不能避免「連續上班 7 天以上」
+ * offDates：這個人這個月已排（含這次）的日期；公休日也算放假但不佔天數
+ * need＝還至少要再休幾天才能把每段上班切到 6 天以內；remaining＝這個月還剩幾天假可以排
+ */
+function workCheck_(s, role, month, offDates, holidays) {
+  const days = monthDays_(month);
+  const off = {};
+  offDates.forEach(d => { off[d] = true; });
+  Object.keys(holidays || {}).forEach(d => { off[d] = true; });
+  let need = 0, run = 0, start = null, longest = 0, longestStart = days[0];
+  days.concat(['END']).forEach(d => {
+    if (d !== 'END' && !off[d]) { if (!run) start = d; run++; return; }
+    if (run) {
+      need += Math.floor(run / 7);
+      if (run > longest) { longest = run; longestStart = start; }
+    }
+    run = 0;
+  });
+  const used = offDates.filter((d, i, a) => a.indexOf(d) === i && d.slice(0, 7) === month).length;
+  return { need: need, remaining: Math.max(0, totalOff_(s, role) - used), longest: longest, longestStart: longestStart };
+}
+
+/** 這個職務每月可以自排幾天（沒設定＝每月休假天數全部都可以自排） */
+function maxSelf_(s, role) {
+  return s.roleLeave[role] ? s.roleLeave[role].self : s.monthOff;
+}
+/** 這個職務每月由公司排幾天（沒設定＝0） */
+function maxMgr_(s, role) {
+  return s.roleLeave[role] ? s.roleLeave[role].mgr : 0;
+}
+
+/** 這筆假是不是管理員幫忙排的（建立者不是本人） */
+function isByAdmin_(b) {
+  return !!b.createdBy && b.createdBy !== b.email;
+}
+
+/** 這個職務受不受每日名額控制（「受控制職位」沒填＝全部都受控制） */
+function isControlled_(s, role) {
+  return !s.controlledRoles || s.controlledRoles.indexOf(role) >= 0;
+}
+
+/** 日期覆寫：職位、門市寫得越明確越優先 */
+function pickOverride_(overrides, date, who) {
+  const list = overrides.filter(o =>
+    o.date === date &&
+    (!o.role || o.role === who.role) &&
+    (!o.store || o.store === who.store));
+  list.sort((a, b) => score(b) - score(a));
+  return list[0] || null;
+  function score(o) { return (o.role ? 2 : 0) + (o.store ? 1 : 0); }
+}
+
+/* ============================== 畫面資料 ============================== */
+
+function buildView_(me, ctx, month) {
+  const s = ctx.settings;
+  month = s.months.indexOf(toMonth_(month)) >= 0 ? toMonth_(month) : s.months[0];
+  const myAll = ctx.bookings.filter(b => b.email === me.email && b.date.slice(0, 7) === month);
+  const myLeave = myAll.filter(b => b.type === LEAVE);
+  const days = monthDays_(month).map(date => {
+    const slot = slot_(ctx, me, date);
+    const mine = myAll.find(b => b.date === date);
+    return {
+      date: date,
+      dow: dow_(date),
+      quota: slot.quota,
+      unlimited: slot.unlimited,
+      used: slot.used,
+      scope: slot.scope,
+      note: slot.note,
+      people: slot.people,
+      holiday: slot.holiday,
+      mine: mine ? mine.type : null,
+      mineBy: mine ? (isByAdmin_(mine) ? 'admin' : 'self') : null
+    };
+  });
+  return {
+    ok: true,
+    version: VERSION,
+    me: { name: me.name, role: me.role, store: me.store, email: me.email },
+    month: month,
+    months: s.months,
+    window: {
+      status: windowStatus_(s),
+      openAt: s.openAt ? fmt_(s.openAt, 'yyyy-MM-dd HH:mm') : '',
+      closeAt: s.closeAt ? fmt_(s.closeAt, 'yyyy-MM-dd HH:mm') : ''
+    },
+    limits: {
+      maxLeave: maxSelf_(s, me.role),
+      maxMgr: maxMgr_(s, me.role),
+      monthOff: s.monthOff,
+      maxWeekend: s.maxWeekend,
+      maxConsecutive: s.maxConsecutive,
+      weekendCapped: weekendCapped_(s, me.role)
+    },
+    counts: {
+      leave: myLeave.length,
+      weekend: myLeave.filter(b => isWeekend_(b.date)).length
+    },
+    warnings: myLeave.length ? warnings_(month, myAll, ctx.holidays) : [],
+    days: days,
+    serverTime: nowStr_()
+  };
+}
+
+/** 提醒（不擋）：每週至少 1 天休假、不得連續上班超過 6 天 */
+function warnings_(month, myAll, holidays) {
+  const out = [];
+  const days = monthDays_(month);
+  const off = {};
+  const leave = {};
+  myAll.forEach(b => { off[b.date] = true; if (b.type === LEAVE) leave[b.date] = true; });
+  // 全公司公休也算放假
+  Object.keys(holidays || {}).forEach(d => { off[d] = true; leave[d] = true; });
+
+  for (let i = 0; i < days.length; i++) {
+    if (dow_(days[i]) !== 0 || i + 6 >= days.length) continue;
+    const week = days.slice(i, i + 7);
+    if (!week.some(d => leave[d])) {
+      out.push(label_(week[0]) + '～' + label_(week[6]) + ' 這週還沒有排休（規定每週至少 1 天）');
+    }
+  }
+
+  let start = null;
+  let n = 0;
+  days.concat(['END']).forEach(d => {
+    if (d !== 'END' && !off[d]) {
+      if (!n) start = d;
+      n++;
+      return;
+    }
+    if (n > 6) {
+      out.push(label_(start) + ' 起連續上班 ' + n + ' 天，超過 6 天（主管安排公排後可能會解決）');
+    }
+    n = 0;
+  });
+  return out;
+}
+
+/* ============================== 身分驗證 ============================== */
+
+function verifyUser_(token) {
+  const email = verifyEmail_(token);
+  const me = getStaff_().find(p => p.email === email);
+  if (!me) fail_('這個帳號（' + email + '）不在人員名單裡，請洽主管', 'NOT_STAFF');
+  return me;
+}
+
+/** 登入後先問「我是誰」：回傳是不是同仁、管理員、系統擁有者，前端依此顯示選單 */
+function whoami_(token) {
+  const email = verifyEmail_(token);
+  const s = getSettings_();
+  const staff = getStaff_().find(p => p.email === email);
+  const owner = !!s.owner && email === s.owner;
+  const admin = owner || s.admins.indexOf(email) >= 0;
+  if (!staff && !admin) fail_('這個帳號（' + email + '）不在人員名單裡，請洽主管', 'NOT_STAFF');
+  return {
+    ok: true,
+    version: VERSION,
+    email: email,
+    name: staff ? staff.name : (owner ? '系統擁有者' : '管理員'),
+    staff: !!staff,
+    admin: admin,
+    owner: owner
+  };
+}
+
+function verifyAdmin_(token) {
+  const email = verifyEmail_(token);
+  const s = getSettings_();
+  if (email !== s.owner && s.admins.indexOf(email) < 0) {
+    fail_('這個帳號（' + email + '）沒有名額管理權限，請到「設定」的管理員Email加入', 'NOT_ADMIN');
+  }
+  return email;
+}
+
+/** 向 Google 驗證 ID Token，回傳 Email */
+function verifyEmail_(token) {
+  if (!token) fail_('請先登入', 'AUTH');
+  const s = getSettings_();
+  if (!s.clientId) fail_('系統尚未設定 CLIENT_ID，請洽管理員', 'SETUP');
+
+  const cache = CacheService.getScriptCache();
+  const key = 'tok_' + Utilities.base64EncodeWebSafe(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, token));
+  let email = cache.get(key);
+
+  if (!email) {
+    const res = UrlFetchApp.fetch(
+      'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(token),
+      { muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) fail_('登入已過期，請重新登入', 'AUTH');
+    const info = JSON.parse(res.getContentText());
+    if (info.aud !== s.clientId) fail_('登入驗證失敗，請重新登入', 'AUTH');
+    if (String(info.email_verified) !== 'true') fail_('這個 Google 帳號的 Email 尚未驗證', 'AUTH');
+    const exp = Number(info.exp);
+    if (!exp || exp * 1000 <= Date.now()) fail_('登入已過期，請重新登入', 'AUTH');
+    email = normEmail_(info.email);
+    const ttl = Math.min(600, Math.floor(exp - Date.now() / 1000));
+    if (ttl > 0) cache.put(key, email, ttl);
+  }
+  return email;
+}
+
+/* ============================== 名額管理（管理員） ============================== */
+
+function adminView_(admin, month) {
+  const s = getSettings_();
+  month = toMonth_(month) || s.month;
+  const ctx = readContext_(month);
+  const roles = roleList_(ctx.rules);
+  const days = monthDays_(month);
+  const grid = {};
+  s.stores.forEach(store => {
+    grid[store] = {};
+    roles.forEach(role => {
+      grid[store][role] = days.map(date => {
+        const sl = slot_(ctx, { role: role, store: store }, date);
+        return {
+          quota: sl.quota,
+          unlimited: sl.unlimited,
+          used: sl.used,
+          scope: sl.scope,
+          note: sl.note,
+          override: sl.override,
+          people: sl.people
+        };
+      });
+    });
+  });
+  const isOwner = !!s.owner && admin === s.owner;
+  return {
+    ok: true,
+    version: VERSION,
+    admin: admin,
+    role: isOwner ? 'owner' : 'admin',
+    owner: s.owner,
+    admins: isOwner ? s.admins.filter(e => e !== s.owner) : null,  // 只有擁有者看得到管理員名單
+    month: month,
+    bookingMonth: s.months.join('、'),
+    config: adminConfig_(s),
+    rulesConfig: {
+      controlled: roles.filter(r => isControlled_(s, r)),
+      rules: ctx.rules
+    },
+    days: days.map(d => dayInfo_(ctx, d)),
+    roles: roles,
+    stores: s.stores,
+    grid: grid,
+    serverTime: nowStr_()
+  };
+}
+
+/**
+ * 設定或清除某天的名額（寫入「日期覆寫」）
+ * req: { date 或 dates[], role, store（空白=所有門市）, quota（null=恢復預設）, note }
+ */
+function adminSet_(admin, req) {
+  const dates = (Array.isArray(req.dates) && req.dates.length ? req.dates : [req.date]).map(String);
+  dates.forEach(assertDate_);
+  if (dates.length > 31) fail_('一次最多設定 31 天', 'BAD_REQUEST');
+  const role = String(req.role || '').trim();
+  const store = String(req.store || '').trim();
+  const clear = req.quota === null || req.quota === undefined || req.quota === '';
+  const quota = clear ? null : Number(req.quota);
+  if (!clear && (!isFinite(quota) || quota < 0 || Math.floor(quota) !== quota || quota > 99)) {
+    fail_('名額要填 0～99 的整數', 'BAD_REQUEST');
+  }
+  const note = String(req.note || '').trim().slice(0, 50);
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) fail_('系統忙碌中，請過幾秒再試', 'BUSY');
+  try {
+    const sh = sheet_(SH.OVERRIDE);
+    dates.forEach(date => {
+      const values = sh.getDataRange().getValues();
+      let row = -1;
+      for (let i = 1; i < values.length; i++) {
+        if (normDate_(values[i][0]) === date &&
+            String(values[i][1]).trim() === role &&
+            String(values[i][2]).trim() === store) { row = i + 1; break; }
+      }
+      if (clear) {
+        if (row > 0) sh.deleteRow(row);
+      } else if (row > 0) {
+        sh.getRange(row, 1, 1, 5).setValues([[date, role, store, quota, note]]);
+      } else {
+        sh.appendRow([date, role, store, quota, note]);
+      }
+    });
+    log_({ email: admin, name: '管理員' }, clear ? '恢復預設名額' : '設定名額',
+      dates.join(',') + '｜' + (role || '全部職位') + '｜' + (store || '全部門市') + (clear ? '' : '｜' + quota));
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+  const msg = (clear ? '已恢復預設' : '已設定名額 ' + quota) + (dates.length > 1 ? '（' + dates.length + ' 天）' : '');
+  return Object.assign(adminView_(admin, dates[0].slice(0, 7)), { message: msg });
+}
+
+/* ---------- 排休總表／代排 ---------- */
+
+/** 所有啟用中的人員（沒有 Email 的也算，管理員可以幫他們排） */
+function getRosterStaff_() {
+  return loadStaffAll_()
+    .filter(p => p.name && p.enabled && p.role && p.store)
+    .map(p => Object.assign({}, p, { key: p.email || 'name:' + p.name }));
+}
+
+/** 這筆劃假紀錄屬於哪個人：先比 Email，比不到再比姓名 */
+function bookingKey_(b, staff) {
+  if (b.email && staff.some(p => p.email === b.email)) return b.email;
+  const byName = staff.find(p => p.name === b.name);
+  if (byName) return byName.key;
+  return b.email || 'name:' + b.name;
+}
+
+function adminRoster_(admin, month) {
+  const s = getSettings_();
+  month = toMonth_(month) || s.month;
+  const ctx = readContext_(month);
+  const staff = getRosterStaff_();
+  const roles = roleList_(ctx.rules);
+  const people = staff.map((p, i) => ({ key: p.key, name: p.name, role: p.role, store: p.store, hasEmail: !!p.email, order: i,
+    maxSelf: maxSelf_(s, p.role), maxMgr: maxMgr_(s, p.role) }));
+  const leaves = {};
+  const leavesBy = {};
+  ctx.bookings.forEach(b => {
+    const key = bookingKey_(b, staff);
+    if (!people.some(p => p.key === key)) {
+      people.push({ key: key, name: b.name, role: b.role, store: b.store, hasEmail: !!b.email, inactive: true, order: 9999 });
+    }
+    (leaves[key] = leaves[key] || {})[b.date] = b.type;
+    if (isByAdmin_(b)) (leavesBy[key] = leavesBy[key] || {})[b.date] = 'admin';
+  });
+  const ri = r => { const i = roles.indexOf(r); return i < 0 ? 99 : i; };
+  const si = st => { const i = s.stores.indexOf(st); return i < 0 ? 99 : i; };
+  people.sort((a, b) => ri(a.role) - ri(b.role) || si(a.store) - si(b.store) || a.order - b.order);
+  const isOwner = !!s.owner && admin === s.owner;
+  return {
+    ok: true,
+    version: VERSION,
+    admin: admin,
+    role: isOwner ? 'owner' : 'admin',
+    month: month,
+    days: monthDays_(month).map(d => dayInfo_(ctx, d)),
+    roles: roles,
+    stores: s.stores,
+    people: people.map(p => { delete p.order; return p; }),
+    leaves: leaves,
+    leavesBy: leavesBy,
+    maxLeave: s.monthOff,
+    monthOff: s.monthOff,
+    serverTime: nowStr_()
+  };
+}
+
+/**
+ * 管理員幫同仁排休／改類型／清除。不受開放時間限制。
+ * 超過名額或個人上限時回傳 NEED_CONFIRM，管理員確認後帶 force:true 再送一次。
+ * req: { key, date, type（自排/公排/特休…；null＝清除）, force }
+ */
+function adminSetLeave_(admin, req) {
+  const date = String(req.date || '');
+  assertDate_(date);
+  const type = req.type === null || req.type === undefined || req.type === '' ? null : normType_(String(req.type).slice(0, 10));
+  T_('auth');
+  const staff = getRosterStaff_();
+  T_('staff');
+  const p = staff.find(x => x.key === String(req.key || ''));
+  if (!p) fail_('找不到這位同仁（可能已停用），請重新整理', 'NOT_FOUND');
+  const month = date.slice(0, 7);
+  let bookAfter = null;
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) fail_('系統忙碌中，請過幾秒再試', 'BUSY');
+  T_('lock');
+  try {
+    const s = getSettings_();
+    T_('settings');
+    const ctx = {
+      settings: s,
+      rules: getRules_(),
+      overrides: getOverrides_(),
+      holidays: getHolidays_(),
+      bookings: getBookings_([addMonths_(month, -1), month, addMonths_(month, 1)])
+    };
+    T_('ctx');
+    if (type !== null && ctx.holidays[date]) {
+      fail_(label_(date) + ' 是全公司公休（' + ctx.holidays[date] + '），大家都放假，不用另外排', 'HOLIDAY');
+    }
+    const sh = sheet_(SH.BOOK);
+    const values = [[]].concat(rows_(SH.BOOK));
+    const fr = freshBookRows_();
+    const rowsOf = [];
+    for (let i = 1; i < values.length; i++) {
+      const b = { date: normDate_(values[i][0]), email: normEmail_(values[i][1]), name: String(values[i][2]).trim() };
+      if (b.date === date && bookingKey_(b, staff) === p.key) rowsOf.push(i + 1);
+    }
+
+    if (type === null) {
+      if (!rowsOf.length) fail_('這天本來就沒有排休', 'NOT_FOUND');
+      rowsOf.reverse().forEach(r => { sh.deleteRow(r); if (fr) fr.splice(r - 2, 1); });
+      log_({ email: admin, name: '管理員' }, '代為取消', date + '｜' + p.name);
+    } else {
+      if (!req.force) {
+        const issues = [];
+        const mine = ctx.bookings.filter(b => bookingKey_(b, staff) === p.key);
+        // 管理員代排不受每日名額限制，只提醒個人上限
+        if (type === LEAVE) {
+          const others = mine.filter(b => b.date !== date && b.date.slice(0, 7) === month);
+          const leaveCnt = others.filter(b => b.type === LEAVE).length;
+          const mx = maxSelf_(s, p.role);
+          if (leaveCnt >= mx) issues.push(p.name + ' ' + Number(month.slice(5)) + ' 月的自排已經有 ' + leaveCnt + ' 天（上限 ' + mx + '）');
+          if (isWeekend_(date) && weekendCapped_(s, p.role)) {
+            const wk = others.filter(b => b.type === LEAVE && isWeekend_(b.date)).length;
+            if (wk >= s.maxWeekend) issues.push('週六日自選已經有 ' + wk + ' 天（上限 ' + s.maxWeekend + '）');
+          }
+        }
+        if (type === MGR && s.roleLeave[p.role]) {
+          const mgrCnt = mine.filter(b => b.date !== date && b.date.slice(0, 7) === month && b.type === MGR).length;
+          const mm = maxMgr_(s, p.role);
+          if (mgrCnt >= mm) issues.push(p.name + ' ' + Number(month.slice(5)) + ' 月的公排已經有 ' + mgrCnt + ' 天（' + p.role + '設定 ' + mm + ' 天）');
+        }
+        const wk7 = workCheck_(s, p.role, month, mine.filter(b => b.date.slice(0, 7) === month && b.date !== date).map(b => b.date).concat([date]), ctx.holidays);
+        if (wk7.need > wk7.remaining) issues.push(label_(wk7.longestStart) + ' 起會連續上班 ' + wk7.longest + ' 天，剩下的休假不夠切到 6 天以內');
+        const run = runLength_(mine.map(b => b.date).concat([date]), date);
+        if (run > s.maxConsecutive) issues.push('會連休 ' + run + ' 天（上限 ' + s.maxConsecutive + '）');
+        if (issues.length) {
+          const e = new Error(issues.join('；'));
+          e.code = 'NEED_CONFIRM';
+          throw e;
+        }
+      }
+      T_('check');
+      if (rowsOf.length) {
+        sh.getRange(rowsOf[0], 6).setValue(type);
+        if (fr) { fr[rowsOf[0] - 2][5] = type; fr[rowsOf[0] - 2][7] = admin; }
+        sh.getRange(rowsOf[0], 8).setValue(admin);
+        rowsOf.slice(1).reverse().forEach(r => { sh.deleteRow(r); if (fr) fr.splice(r - 2, 1); });
+      } else {
+        const newRow = [date, p.email, p.name, p.role, p.store, type, nowStr_(), admin];
+        sh.appendRow(newRow);
+        if (fr) fr.push(newRow);
+      }
+      T_('write');
+      log_({ email: admin, name: '管理員' }, req.force ? '代排（超過上限確認）' : '代排', date + '｜' + p.name + '｜' + type);
+    }
+    T_('log');
+    SpreadsheetApp.flush();
+    T_('flush');
+    bookAfter = freshBookRows_();
+  } finally {
+    lock.releaseLock();
+  }
+  afterWrite_([SH.BOOK], bookAfter);
+  T_('unlock');
+  return Object.assign(adminRoster_(admin, month),
+    { message: type === null ? '已取消 ' + p.name + ' ' + label_(date) + ' 的排休' : '已幫 ' + p.name + ' 排 ' + label_(date) + ' ' + type });
+}
+
+/** 管理頁顯示的職務：固定六種，加上名額規則裡出現的其他職務 */
+function roleList_(rules) {
+  const out = ALL_ROLES.slice();
+  rules.forEach(r => { if (out.indexOf(r.role) < 0) out.push(r.role); });
+  return out;
+}
+
+/**
+ * 儲存「職務與每日名額」（管理員）
+ * req: { controlled: ['攝影師','安撫師'], rules: [{ role, dayType, scope, stores[], quota, note }] }
+ * 名額規則整張表重寫；受控制職位寫進「設定」
+ */
+function adminSaveRules_(admin, req) {
+  const s = getSettings_();
+  if (!Array.isArray(req.controlled) || !Array.isArray(req.rules)) fail_('資料格式不對', 'BAD_REQUEST');
+  const controlled = req.controlled.map(x => String(x).trim()).filter((x, i, a) => x && a.indexOf(x) === i);
+  if (req.rules.length > 300) fail_('規則太多', 'BAD_REQUEST');
+  const rows = req.rules.map(r => {
+    const role = String(r.role || '').trim();
+    const dayType = normDayType_(r.dayType);
+    const scope = String(r.scope || '') === '合計' ? '合計' : '各門市';
+    const stores = (Array.isArray(r.stores) ? r.stores : []).map(x => String(x).trim()).filter(x => s.stores.indexOf(x) >= 0);
+    const quota = Number(r.quota);
+    if (!role) fail_('職務不能空白', 'BAD_REQUEST');
+    if (!Number.isInteger(quota) || quota < 0 || quota > 99) fail_(role + ' ' + dayType + ' 的名額要填 0～99 的整數', 'BAD_REQUEST');
+    return [role, dayType, scope, stores.join(','), quota, String(r.note || '').trim().slice(0, 50)];
+  });
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) fail_('系統忙碌中，請過幾秒再試', 'BUSY');
+  try {
+    const qsh = sheet_(SH.QUOTA);
+    const last = qsh.getLastRow();
+    if (last > 1) qsh.getRange(2, 1, last - 1, 6).clearContent();
+    if (rows.length) qsh.getRange(2, 1, rows.length, 6).setValues(rows);
+    const ssh = sheet_(SH.SETTINGS);
+    const values = ssh.getDataRange().getValues();
+    let row = -1;
+    for (let i = 1; i < values.length; i++) if (String(values[i][0]).trim() === '受控制職位') { row = i + 1; break; }
+    if (row > 0) ssh.getRange(row, 2).setValue(controlled.join(','));
+    else ssh.appendRow(['受控制職位', controlled.join(','), '這些職務每天休假有名額限制；沒列的職務每天不限人數（個人每月上限照算）']);
+    log_({ email: admin, name: '管理員' }, '設定職務名額', '受控制：' + (controlled.join('、') || '無') + '｜規則 ' + rows.length + ' 條');
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+  return Object.assign(adminView_(admin), { message: '職務與每日名額已儲存' });
+}
+
+/** 管理頁每一天的標頭：全公司公休、全公司禁休 */
+function dayInfo_(ctx, date) {
+  const block = (ctx.overrides || []).find(o => o.date === date && !o.role && !o.store && o.quota <= 0);
+  return {
+    date: date,
+    dow: dow_(date),
+    holiday: (ctx.holidays && ctx.holidays[date]) || '',
+    block: block ? (block.note || '禁休') : ''
+  };
+}
+
+/**
+ * 整天設定（管理員）
+ * req: { dates[], mode: 'holiday'（全公司公休）| 'block'（全公司禁休）| 'normal'（恢復正常）, note }
+ * - 公休：所有人自動放假，不佔指定假；這天原本的排休紀錄會刪掉（大家本來就放假）
+ * - 禁休：所有職位、所有門市都不能劃；這天其他的特別名額設定會一起清掉，已排的假保留
+ * - 恢復正常：拿掉公休和全公司禁休，回到名額規則
+ */
+function adminSetDay_(admin, req) {
+  const dates = (Array.isArray(req.dates) ? req.dates : [req.date]).map(String)
+    .filter((d, i, a) => a.indexOf(d) === i).sort();
+  if (!dates.length) fail_('請選擇日期', 'BAD_REQUEST');
+  dates.forEach(assertDate_);
+  if (dates.length > 31) fail_('一次最多設定 31 天', 'BAD_REQUEST');
+  const mode = String(req.mode || '');
+  if (['holiday', 'block', 'normal'].indexOf(mode) < 0) fail_('設定方式不對', 'BAD_REQUEST');
+  const note = String(req.note || '').trim().slice(0, 30) || (mode === 'holiday' ? '公休' : mode === 'block' ? '全公司禁休' : '');
+  const set = {};
+  dates.forEach(d => { set[d] = true; });
+
+  let removedLeaves = 0;
+  let keptLeaves = 0;
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) fail_('系統忙碌中，請過幾秒再試', 'BUSY');
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let hsh = ss.getSheetByName(SH.HOLIDAY);
+    if (!hsh) {
+      hsh = ss.insertSheet(SH.HOLIDAY);
+      hsh.getRange(1, 1, hsh.getMaxRows(), 1).setNumberFormat('@');
+      hsh.getRange(1, 1, 1, 2).setValues([['日期', '名稱']]).setFontWeight('bold').setBackground('#f3e7dc');
+      hsh.setFrozenRows(1);
+    }
+    // 1. 先拿掉這幾天原本的公休
+    deleteRowsWhere_(hsh, r => set[normDate_(r[0])]);
+    // 2. 日期覆寫：禁休＝清掉這幾天所有覆寫；其他＝只清掉全公司那一筆
+    const osh = sheet_(SH.OVERRIDE);
+    deleteRowsWhere_(osh, r => set[normDate_(r[0])] &&
+      (mode === 'block' || (!String(r[1]).trim() && !String(r[2]).trim())));
+
+    if (mode === 'holiday') {
+      hsh.getRange(hsh.getLastRow() + 1, 1, dates.length, 2).setValues(dates.map(d => [d, note]));
+      removedLeaves = deleteRowsWhere_(sheet_(SH.BOOK), r => set[normDate_(r[0])]);
+    } else if (mode === 'block') {
+      osh.getRange(osh.getLastRow() + 1, 1, dates.length, 5).setValues(dates.map(d => [d, '', '', 0, note]));
+      keptLeaves = rows_(SH.BOOK).filter(r => set[normDate_(r[0])]).length;
+    }
+    log_({ email: admin, name: '管理員' },
+      mode === 'holiday' ? '設定全公司公休' : mode === 'block' ? '設定全公司禁休' : '恢復正常',
+      dates.join(',') + (note ? '｜' + note : '') + (removedLeaves ? '｜刪除排休 ' + removedLeaves + ' 筆' : ''));
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+  const range = dates.length > 1 ? label_(dates[0]) + '～' + label_(dates[dates.length - 1]) + '（' + dates.length + ' 天）' : label_(dates[0]);
+  let msg = mode === 'holiday' ? range + ' 設為全公司公休' : mode === 'block' ? range + ' 設為全公司禁休' : range + ' 已恢復正常';
+  if (removedLeaves) msg += '，原本的 ' + removedLeaves + ' 筆排休已刪除（公休不佔指定假）';
+  if (keptLeaves) msg += '，已經排的 ' + keptLeaves + ' 筆假還在，請到排休總表確認';
+  const view = req.view === 'roster' ? adminRoster_(admin, dates[0].slice(0, 7)) : adminView_(admin, dates[0].slice(0, 7));
+  return Object.assign(view, { message: msg });
+}
+
+/** 刪除符合條件的列（由下往上刪），回傳刪除筆數 */
+function deleteRowsWhere_(sh, fn) {
+  const values = sh.getDataRange().getValues();
+  let n = 0;
+  for (let i = values.length - 1; i >= 1; i--) {
+    if (fn(values[i])) { sh.deleteRow(i + 1); n++; }
+  }
+  return n;
+}
+
+/** 設定管理員名單（只有系統擁有者可以） */
+function adminSetAdmins_(admin, list) {
+  const s = getSettings_();
+  if (!s.owner || admin !== s.owner) fail_('只有系統擁有者可以設定管理員', 'NOT_OWNER');
+  if (!Array.isArray(list)) fail_('管理員名單格式不對', 'BAD_REQUEST');
+  const emails = [];
+  list.forEach(x => {
+    const e = normEmail_(x);
+    if (!e) return;
+    if (!/^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(e)) fail_('Email 格式不對：' + e, 'BAD_REQUEST');
+    if (e !== s.owner && emails.indexOf(e) < 0) emails.push(e);
+  });
+  if (emails.length > 30) fail_('管理員最多 30 位', 'BAD_REQUEST');
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) fail_('系統忙碌中，請過幾秒再試', 'BUSY');
+  try {
+    const sh = sheet_(SH.SETTINGS);
+    const values = sh.getDataRange().getValues();
+    let row = -1;
+    for (let i = 1; i < values.length; i++) {
+      if (String(values[i][0]).trim() === '管理員Email') { row = i + 1; break; }
+    }
+    const value = emails.join(', ');
+    if (row > 0) sh.getRange(row, 2).setValue(value);
+    else sh.appendRow(['管理員Email', value, '可以使用名額管理頁的 Google 帳號，多個用逗號分隔']);
+    log_({ email: admin, name: '系統擁有者' }, '設定管理員', value || '（無）');
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+  return Object.assign(adminView_(admin), { message: '管理員名單已更新' });
+}
+
+/** 管理頁「系統設定」表單用的目前值 */
+function adminConfig_(s) {
+  const raw = s.raw['劃假月份'];
+  const list = isDate_(raw) ? [toMonth_(raw)] : split_(raw).map(toMonth_).filter(Boolean);
+  return {
+    startMonth: list.length === 1 ? list[0] : '',      // 空白＝自動（下個月）
+    customList: list.length > 1 ? list.join(',') : '',  // 試算表裡手動填了多個月份
+    monthCount: Math.max(1, Math.floor(num_(s.raw['開放月數'], 1))),
+    months: s.months,
+    openAt: s.openAt ? fmt_(s.openAt, 'yyyy-MM-dd HH:mm') : '',
+    closeAt: s.closeAt ? fmt_(s.closeAt, 'yyyy-MM-dd HH:mm') : '',
+    maxLeave: s.monthOff,
+    monthOff: s.monthOff,
+    roleLeave: s.roleLeave,
+    roles: ALL_ROLES,
+    maxWeekend: s.maxWeekend,
+    maxConsecutive: s.maxConsecutive
+  };
+}
+
+/** 儲存系統設定（只允許改這幾項） */
+function adminSaveSettings_(admin, cfg) {
+  const out = {};
+  const start = String(cfg.startMonth || '').trim();
+  if (start && !toMonth_(start)) fail_('起始月份格式不對', 'BAD_REQUEST');
+  out['劃假月份'] = start ? toMonth_(start) : '';
+  const intIn = (v, lo, hi, label) => {
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < lo || n > hi) fail_(label + '要填 ' + lo + '～' + hi + ' 的整數', 'BAD_REQUEST');
+    return n;
+  };
+  out['開放月數'] = intIn(cfg.monthCount, 1, 6, '開放月數');
+  const openAt = toTime_(cfg.openAt), closeAt = toTime_(cfg.closeAt);
+  if (!openAt || !closeAt) fail_('開放和截止時間都要填', 'BAD_REQUEST');
+  if (closeAt.getTime() <= openAt.getTime()) fail_('截止時間要晚於開放時間', 'BAD_REQUEST');
+  out['開放時間'] = fmt_(openAt, 'yyyy-MM-dd HH:mm');
+  out['截止時間'] = fmt_(closeAt, 'yyyy-MM-dd HH:mm');
+  out['每月休假天數'] = intIn(cfg.monthOff, 0, 31, '每月休假天數');
+  const rl = cfg.roleLeave && typeof cfg.roleLeave === 'object' ? cfg.roleLeave : {};
+  out['職務自排公排'] = Object.keys(rl).filter(r => String(r).trim()).map(r => {
+    const a = intIn(rl[r].self, 0, 31, r + '的自排天數'), b = intIn(rl[r].mgr, 0, 31, r + '的公排天數');
+    return String(r).trim() + ':' + a + ':' + b;
+  }).join(',');
+  out['週末自選上限'] = intIn(cfg.maxWeekend, 0, 10, '週末自選上限');
+  out['連休上限'] = intIn(cfg.maxConsecutive, 1, 31, '連休上限');
+
+  const desc = {
+    '劃假月份': '開放劃假的起始月份；空白＝自動從下個月開始（也可以填多個月份，用逗號分隔）',
+    '開放月數': '從起始月份開始，一次開放幾個月',
+    '每月休假天數': '沒有另外設定的職務，每月這幾天都可以自排',
+    '職務自排公排': '格式 職務:自排天數:公排天數，多個用逗號分隔，例如 攝影師:5:3,安撫師:5:3'
+  };
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) fail_('系統忙碌中，請過幾秒再試', 'BUSY');
+  try {
+    const sh = sheet_(SH.SETTINGS);
+    const values = sh.getDataRange().getValues();
+    Object.keys(out).forEach(key => {
+      let row = -1;
+      for (let i = 1; i < values.length; i++) {
+        if (String(values[i][0]).trim() === key) { row = i + 1; break; }
+      }
+      if (row > 0) sh.getRange(row, 2).setValue(out[key]);
+      else { sh.appendRow([key, out[key], desc[key] || '']); values.push([key, out[key], '']); }
+    });
+    log_({ email: admin, name: '管理員' }, '修改系統設定', Object.keys(out).map(k => k + '=' + out[k]).join('；'));
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+  return Object.assign(adminView_(admin), { message: '系統設定已儲存' });
+}
+
+/* ============================== 讀取試算表 ============================== */
+
+function readContext_(month) {
+  const settings = getSettings_();
+  return {
+    settings: settings,
+    rules: getRules_(),
+    overrides: getOverrides_(),
+    holidays: getHolidays_(),
+    bookings: getBookings_(month ? [month] : settings.months)
+  };
+}
+
+function getSettings_() {
+  if (FRESH_ !== 'all' && MEMO_.settings) return MEMO_.settings;
+  const out = readSettings_();
+  if (FRESH_ !== 'all') MEMO_.settings = out;
+  return out;
+}
+
+function readSettings_() {
+  const m = {};
+  rows_(SH.SETTINGS).forEach(r => { if (r[0] !== '') m[String(r[0]).trim()] = r[1]; });
+  // 劃假月份：空白＝自動從下個月開始；填一個月份＝從那個月開始；填多個（逗號分隔）＝就開放那幾個月
+  const raw = m['劃假月份'];
+  const list = (isDate_(raw) ? [toMonth_(raw)] : split_(raw).map(toMonth_))
+    .filter((x, i, a) => x && a.indexOf(x) === i).sort();
+  if (!list.length && String(raw || '').trim()) fail_('「設定」的劃假月份格式不對，請填 2026-12 或留空白', 'SETUP');
+  const count = Math.max(1, Math.min(12, Math.floor(num_(m['開放月數'], 1))));
+  let months = list;
+  if (list.length <= 1) {
+    const start = list[0] || addMonths_(fmt_(new Date(), 'yyyy-MM'), 1);
+    months = [];
+    for (let i = 0; i < count; i++) months.push(addMonths_(start, i));
+  }
+  return {
+    month: months[0],
+    months: months,
+    openAt: toTime_(m['開放時間']),
+    closeAt: toTime_(m['截止時間']),
+    monthOff: num_(m['每月休假天數'], 8),
+    maxLeave: num_(m['每月休假天數'], 8),
+    roleLeave: parseRoleLeave_(m['職務自排公排']),
+    maxWeekend: num_(m['週末自選上限'], 2),
+    maxConsecutive: num_(m['連休上限'], 2),
+    noWeekendCapRoles: split_(m['不受週末上限職位']),
+    controlledRoles: Object.prototype.hasOwnProperty.call(m, '受控制職位') ? split_(m['受控制職位']) : null,
+    stores: m['門市清單'] ? split_(m['門市清單']) : ['台北', '中壢', '楊梅', '竹北', '台中'],
+    admins: split_(m['管理員Email']).map(normEmail_).filter((x, i, a) => x && a.indexOf(x) === i),
+    owner: normEmail_(m['系統擁有者Email']),
+    staffSource: sheetId_(m['人員資料來源']),
+    staffSheet: String(m['人員資料工作表'] || '所有員工').trim(),
+    clientId: String(m['CLIENT_ID'] || '').trim(),
+    raw: m
+  };
+}
+
+/** 接受試算表網址或 ID */
+function sheetId_(v) {
+  const t = String(v || '').trim();
+  const m = t.match(/\/d\/([a-zA-Z0-9_-]{20,})/);
+  return m ? m[1] : t;
+}
+
+function addMonths_(month, n) {
+  const p = month.split('-').map(Number);
+  const t = new Date(Date.UTC(p[0], p[1] - 1 + n, 1));
+  return t.getUTCFullYear() + '-' + pad_(t.getUTCMonth() + 1);
+}
+
+/** 可以登入劃假的同仁（有 Email、啟用、有職位和門市） */
+function getStaff_() {
+  return loadStaffAll_().filter(p => p.email && p.enabled && p.role && p.store);
+}
+
+/* ---------- 人員名單：同步「小日子員工資料」＋「人員」表的例外調整 ---------- */
+
+/**
+ * 全部人員（含停用的），快取 60 秒。
+ * 1. 「設定」有填人員資料來源 → 讀那份試算表的 姓名／Email／部門／職稱／狀態 五欄（其他欄位完全不讀）
+ * 2. 「人員」表是例外調整：Email（或沒填 Email 時用姓名）對到的人，有填的欄位會蓋過去；對不到的就當作新增
+ */
+function loadStaffAll_() {
+  const cache = CacheService.getScriptCache();
+  if (MEMO_.staff) return MEMO_.staff;
+  let hit = null;
+  try { hit = cacheGetBig_('staff_v3'); } catch (e) {}
+  if (hit) { MEMO_.staff = JSON.parse(hit); return MEMO_.staff; }
+  const s = getSettings_();
+  const list = s.staffSource ? readStaffSource_(s) : [];
+  rows_(SH.STAFF).forEach(r => {
+    const email = normEmail_(r[0]);
+    const name = String(r[1]).trim();
+    if (!email && !name) return;
+    const cell = String(r[4]).trim();
+    const on = r[4] === true || /^(true|是|y|yes|1)$/i.test(cell);
+    const off = r[4] === false || /^(false|否|n|no|0)$/i.test(cell);
+    let p = list.find(x => email ? x.email === email : x.name === name);
+    if (!p) {
+      if (!name) return;
+      p = { email: email, name: name, role: '', store: '', enabled: true, source: '人員表' };
+      list.push(p);
+    } else {
+      p.source = '同步＋人員表調整';
+    }
+    if (name) p.name = name;
+    if (String(r[2]).trim()) p.role = String(r[2]).trim();
+    if (String(r[3]).trim()) p.store = String(r[3]).trim();
+    if (off) p.enabled = false;
+    else if (on) p.enabled = true;
+  });
+  // 人員名單要開另一份試算表，比較慢：放 10 分鐘；管理員修改或改到人員相關的表會立刻清掉
+  try { cachePutBig_('staff_v3', JSON.stringify(list), 600); } catch (e) {}
+  MEMO_.staff = list;
+  return list;
+}
+
+function readStaffSource_(s) {
+  let ss;
+  try { ss = SpreadsheetApp.openById(s.staffSource); }
+  catch (e) { fail_('打不開人員資料來源，請確認「設定」的人員資料來源和權限', 'SETUP'); }
+  const sh = ss.getSheetByName(s.staffSheet);
+  if (!sh) fail_('人員資料來源裡找不到「' + s.staffSheet + '」工作表', 'SETUP');
+  const last = sh.getLastRow();
+  if (last < 2) return [];
+  const header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(x => String(x).trim());
+  const col = name => {
+    const i = header.indexOf(name);
+    if (i < 0) fail_('人員資料來源找不到「' + name + '」欄', 'SETUP');
+    return i + 1;
+  };
+  // 一欄一欄讀，只讀需要的五欄
+  const read = c => sh.getRange(2, c, last - 1, 1).getValues().map(r => r[0]);
+  const names = read(col('姓名')), emails = read(col('Email')), depts = read(col('部門')),
+    titles = read(col('職稱')), status = read(col('狀態'));
+  const deptMap = getDeptMap_(), titleMap = getTitleMap_();
+  const out = [];
+  names.forEach((n, i) => {
+    const name = String(n || '').trim();
+    if (!name) return;
+    const dept = String(depts[i] || '').trim();
+    const store = Object.prototype.hasOwnProperty.call(deptMap, dept) ? deptMap[dept] : '';
+    const role = mapRole_(titles[i], titleMap);
+    const left = String(status[i] || '').indexOf('離職') >= 0;
+    out.push({
+      email: normEmail_(emails[i]), name: name, role: role, store: store,
+      enabled: !left && !!store && !!role,
+      dept: dept, title: String(titles[i] || '').trim(), left: left, source: '同步'
+    });
+  });
+  return out;
+}
+
+/** 職稱照順序找第一個對得到的職位（例如「店長, 攝影師」→ 攝影師、「安撫師，攝助」→ 安撫師） */
+function mapRole_(title, map) {
+  const parts = String(title || '').split(/[,，、\/;；]+/).map(x => x.trim()).filter(Boolean);
+  for (let i = 0; i < parts.length; i++) {
+    for (let j = 0; j < map.length; j++) {
+      if (parts[i].indexOf(map[j][0]) >= 0) return map[j][1];
+    }
+  }
+  return '';
+}
+
+function getDeptMap_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.DEPT);
+  if (!sh) return DEFAULT_DEPT;
+  const m = {};
+  sh.getDataRange().getValues().slice(1).forEach(r => { const d = String(r[0]).trim(); if (d) m[d] = String(r[1] || '').trim(); });
+  return m;
+}
+
+function getTitleMap_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.TITLE);
+  if (!sh) return DEFAULT_TITLE;
+  return sh.getDataRange().getValues().slice(1)
+    .map(r => [String(r[0]).trim(), String(r[1]).trim()]).filter(r => r[0] && r[1]);
+}
+
+function getRules_() {
+  return rows_(SH.QUOTA)
+    .filter(r => String(r[0]).trim() && String(r[4]).trim() !== '')
+    .map(r => ({
+      role: String(r[0]).trim(),
+      dayType: normDayType_(r[1]),
+      scope: String(r[2]).indexOf('合計') >= 0 ? '合計' : '各門市',
+      stores: split_(r[3]),
+      quota: Number(r[4])
+    }));
+}
+
+function getOverrides_() {
+  return rows_(SH.OVERRIDE)
+    .filter(r => normDate_(r[0]) && String(r[3]).trim() !== '')
+    .map(r => ({
+      date: normDate_(r[0]),
+      role: String(r[1]).trim(),
+      store: String(r[2]).trim(),
+      quota: Number(r[3]),
+      note: String(r[4] || '').trim()
+    }));
+}
+
+/** 全公司公休日：{ '2027-02-16': '過年' } */
+function getHolidays_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.HOLIDAY);
+  const out = {};
+  if (!sh) return out;
+  rows_(SH.HOLIDAY).forEach(r => {
+    const d = normDate_(r[0]);
+    if (d) out[d] = String(r[1] || '').trim() || '公休';
+  });
+  return out;
+}
+
+function getBookings_(months) {
+  return rows_(SH.BOOK)
+    .map(r => ({
+      date: normDate_(r[0]),
+      email: normEmail_(r[1]),
+      name: String(r[2]).trim(),
+      role: String(r[3]).trim(),
+      store: String(r[4]).trim(),
+      type: normType_(r[5]),
+      createdBy: normEmail_(r[7])
+    }))
+    .filter(b => b.date && months.indexOf(b.date.slice(0, 7)) >= 0);
+}
+
+/* ============================== 小工具 ============================== */
+
+function windowStatus_(s) {
+  if (!s.openAt || !s.closeAt) return 'unset';
+  const now = Date.now();
+  if (now < s.openAt.getTime()) return 'before';
+  if (now > s.closeAt.getTime()) return 'closed';
+  return 'open';
+}
+
+function assertOpen_(s) {
+  const st = windowStatus_(s);
+  if (st === 'unset') fail_('主管還沒設定劃假時間', 'CLOSED');
+  if (st === 'before') fail_('劃假 ' + fmt_(s.openAt, 'M/d HH:mm') + ' 才開放', 'CLOSED');
+  if (st === 'closed') fail_('劃假已經截止，要調整請找人換班並經主管同意', 'CLOSED');
+}
+
+function weekendCapped_(s, role) {
+  return s.noWeekendCapRoles.indexOf(role) < 0;
+}
+
+function assertDate_(d) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) fail_('日期格式錯誤', 'BAD_DATE');
+}
+
+function fail_(msg, code) {
+  const e = new Error(msg);
+  e.code = code;
+  throw e;
+}
+
+function sheet_(name) {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
+  if (!sh) fail_('找不到「' + name + '」工作表，請先執行 setup', 'SETUP');
+  return sh;
+}
+
+function rows_(name) {
+  const mk = 'r_' + name;
+  if (FRESH_ === 'all') return sheet_(name).getDataRange().getValues().slice(1);
+  if (FRESH_ === 'book' && name === SH.BOOK) {
+    // 劃假紀錄要最新：直接讀試算表；同一次請求在寫入之前重複讀，就用剛剛讀到的（寫入後會清掉）
+    if (!MEMO_['fresh_' + name]) { MEMO_['fresh_' + name] = sheet_(name).getDataRange().getValues().slice(1); T_('read-' + name); }
+    return MEMO_['fresh_' + name];
+  }
+  if (MEMO_[mk]) return MEMO_[mk];
+  const key = 'r3_' + name + '_' + sheetVer_(name);
+  let out = null;
+  try { const hit = cacheGetBig_(key); if (hit) out = unpackVals_(JSON.parse(hit)); } catch (e) { out = null; }
+  if (!out) {
+    out = sheet_(name).getDataRange().getValues().slice(1);
+    T_('miss-' + name);
+    try { cachePutBig_(key, JSON.stringify(packVals_(out)), 600); } catch (e) {}
+  }
+  MEMO_[mk] = out;
+  return out;
+}
+
+/* ============================== 讀取快取（v2.3.0） ==============================
+ * 每次請求不再重讀整份試算表：讀過的工作表內容放在 Script Cache（10 分鐘），
+ * 用一個「資料版本」當鑰匙；只要有人劃假、取消、管理員改設定，或有人直接改試算表（onEdit），
+ * 版本就換新，下一次讀取自然會抓最新資料。
+ * 會寫入的動作（劃假、取消、管理員修改）一律不用快取，直接讀試算表，名額檢查永遠以最新資料為準。
+ */
+let FRESH_ = true;
+let BUMPED_ = false;
+let T0_ = 0;
+const TIMES_ = [];
+/** 效能紀錄：回傳裡的 _t 可以看每一步花幾毫秒 */
+function T_(label) { TIMES_.push(label + ':' + (Date.now() - T0_)); }
+const MEMO_ = {};
+
+/** 寫入完成後：先把版本換新，接下來組回傳畫面時就能用快取（只有剛改的表會重讀） */
+function afterWrite_(names, bookRows) {
+  for (const k in MEMO_) if (k.indexOf('fresh_') === 0 || k.indexOf('r_') === 0) delete MEMO_[k];
+  bumpVer_(names);
+  BUMPED_ = true;
+  FRESH_ = false;
+  // 剛剛讀到的劃假紀錄已經照寫入的內容改好了：直接放進快取，不用再讀一次試算表
+  if (bookRows) {
+    MEMO_['r_' + SH.BOOK] = bookRows;
+    try { cachePutBig_('r3_' + SH.BOOK + '_' + sheetVer_(SH.BOOK), JSON.stringify(packVals_(bookRows)), 600); } catch (e) {}
+  }
+}
+
+/** 這次請求剛讀到的最新劃假紀錄（還沒讀就是 null） */
+function freshBookRows_() {
+  return MEMO_['fresh_' + SH.BOOK] || null;
+}
+
+function dataVer_() {
+  if (MEMO_.dv) return MEMO_.dv;
+  let v = null;
+  try {
+    const c = CacheService.getScriptCache();
+    v = c.get('dv');
+    if (!v) { v = newVer_(); c.put('dv', v, 21600); }
+  } catch (e) { v = newVer_(); }
+  MEMO_.dv = v;
+  return v;
+}
+
+function newVer_() {
+  return String(Date.now()) + Math.random().toString(36).slice(2, 6);
+}
+
+/** 每張工作表自己的版本：只有那張表變了才重讀它 */
+function sheetVer_(name) {
+  const mk = 'sv_' + name;
+  if (MEMO_[mk]) return MEMO_[mk];
+  let v = null;
+  try {
+    const c = CacheService.getScriptCache();
+    v = c.get('sv2_' + name);
+    if (!v) { v = newVer_(); c.put('sv2_' + name, v, 21600); }
+  } catch (e) { v = newVer_(); }
+  MEMO_[mk] = v;
+  return v;
+}
+
+/** 資料有變：整體版本（給自動更新比對）一定換新；names＝只有這幾張表變了，沒給＝全部都可能變 */
+function bumpVer_(names) {
+  try {
+    const c = CacheService.getScriptCache();
+    const v = newVer_();
+    const m = { dv: v };
+    (names || Object.keys(SH).map(k => SH[k])).forEach(n => { m['sv2_' + n] = v; });
+    c.putAll(m, 21600);
+  } catch (e) {}
+  for (const k in MEMO_) if (k === 'dv' || k.indexOf('sv_') === 0) delete MEMO_[k];
+}
+
+function clearStaffCache_() {
+  try { CacheService.getScriptCache().remove('staff_v3'); } catch (e) {}
+}
+
+/** 有人直接在試算表上修改：資料版本換新；改到人員相關的表，人員名單也重讀 */
+function onEdit(e) {
+  try {
+    const n = e && e.range ? e.range.getSheet().getName() : '';
+    bumpVer_(n ? [n] : null);
+    if (!n || [SH.STAFF, SH.DEPT, SH.TITLE, SH.SETTINGS].indexOf(n) >= 0) clearStaffCache_();
+  } catch (err) {}
+}
+
+/** 日期放進快取前先轉成數字，拿出來再轉回日期 */
+function packVals_(rows) {
+  return rows.map(r => r.map(v => isDate_(v) ? { __d: v.getTime() } : v));
+}
+function unpackVals_(rows) {
+  return rows.map(r => r.map(v => (v && typeof v === 'object' && '__d' in v) ? new Date(v.__d) : v));
+}
+
+/** Script Cache 一格最多 100KB，資料大就切成好幾格存 */
+const CHUNK_ = 25000;
+function cachePutBig_(key, str, ttl) {
+  const c = CacheService.getScriptCache();
+  if (str.length <= CHUNK_) { c.put(key, str, ttl); return; }
+  const parts = {};
+  let n = 0;
+  for (let i = 0; i < str.length; i += CHUNK_) parts[key + '#' + (n++)] = str.slice(i, i + CHUNK_);
+  if (n > 40) return; // 太大就不快取
+  c.putAll(parts, ttl);
+  c.put(key, '__parts:' + n, ttl);
+}
+function cacheGetBig_(key) {
+  const c = CacheService.getScriptCache();
+  const head = c.get(key);
+  if (!head) return null;
+  if (head.indexOf('__parts:') !== 0) return head;
+  const n = Number(head.slice(8));
+  const keys = [];
+  for (let i = 0; i < n; i++) keys.push(key + '#' + i);
+  const got = c.getAll(keys);
+  let out = '';
+  for (let i = 0; i < n; i++) { if (got[keys[i]] == null) return null; out += got[keys[i]]; }
+  return out;
+}
+
+function log_(me, action, date) {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.LOG);
+  if (sh) sh.appendRow([nowStr_(), me.email, me.name, action, date]);
+}
+
+function json_(o) {
+  if (o && TIMES_.length) { T_('end'); o._t = TIMES_.join(' '); }
+  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function isDate_(v) {
+  return Object.prototype.toString.call(v) === '[object Date]' && !isNaN(v.getTime());
+}
+
+function fmt_(d, pattern) {
+  return Utilities.formatDate(d, TZ, pattern);
+}
+
+function nowStr_() {
+  return fmt_(new Date(), 'yyyy-MM-dd HH:mm:ss');
+}
+
+function pad_(n) {
+  return (n < 10 ? '0' : '') + n;
+}
+
+function normEmail_(v) {
+  return String(v || '').trim().toLowerCase();
+}
+
+function normDate_(v) {
+  if (isDate_(v)) return fmt_(v, 'yyyy-MM-dd');
+  const m = String(v || '').trim().match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+  return m ? m[1] + '-' + pad_(+m[2]) + '-' + pad_(+m[3]) : '';
+}
+
+function toMonth_(v) {
+  if (isDate_(v)) return fmt_(v, 'yyyy-MM');
+  const m = String(v || '').trim().match(/^(\d{4})[-\/](\d{1,2})$/);
+  return m ? m[1] + '-' + pad_(+m[2]) : '';
+}
+
+/** 「2026-11-10 21:00」視為台灣時間 */
+function toTime_(v) {
+  if (isDate_(v)) return v;
+  const m = String(v || '').trim().match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})(?:\s+(\d{1,2}):(\d{2}))?$/);
+  if (!m) return null;
+  const d = new Date(m[1] + '-' + pad_(+m[2]) + '-' + pad_(+m[3]) + 'T' +
+    pad_(+(m[4] || 0)) + ':' + (m[5] || '00') + ':00+08:00');
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function num_(v, def) {
+  const n = Number(v);
+  return v === '' || v === null || v === undefined || isNaN(n) ? def : n;
+}
+
+function split_(v) {
+  return String(v || '').split(/[,，、\s]+/).map(x => x.trim()).filter(Boolean);
+}
+
+function normDayType_(v) {
+  const s = String(v || '');
+  if (s.indexOf('平') >= 0) return '平日';
+  if (s.indexOf('六') >= 0) return '六';
+  if (s.indexOf('日') >= 0 || s.indexOf('天') >= 0) return '日';
+  return '平日';
+}
+
+function dow_(date) {
+  const p = date.split('-').map(Number);
+  return new Date(Date.UTC(p[0], p[1] - 1, p[2])).getUTCDay();
+}
+
+function dayType_(date) {
+  const d = dow_(date);
+  return d === 0 ? '日' : d === 6 ? '六' : '平日';
+}
+
+function isWeekend_(date) {
+  const d = dow_(date);
+  return d === 0 || d === 6;
+}
+
+function addDays_(date, n) {
+  const p = date.split('-').map(Number);
+  const t = new Date(Date.UTC(p[0], p[1] - 1, p[2] + n));
+  return t.getUTCFullYear() + '-' + pad_(t.getUTCMonth() + 1) + '-' + pad_(t.getUTCDate());
+}
+
+function monthDays_(month) {
+  const p = month.split('-').map(Number);
+  const n = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();
+  const out = [];
+  for (let i = 1; i <= n; i++) out.push(month + '-' + pad_(i));
+  return out;
+}
+
+/** 包含 date 在內，前後連續休假的天數 */
+function runLength_(dates, date) {
+  const set = {};
+  dates.forEach(d => { set[d] = true; });
+  let n = 1;
+  for (let d = addDays_(date, -1); set[d]; d = addDays_(d, -1)) n++;
+  for (let d = addDays_(date, 1); set[d]; d = addDays_(d, 1)) n++;
+  return n;
+}
+
+function label_(date) {
+  const p = date.split('-').map(Number);
+  return p[1] + '/' + p[2] + '（' + '日一二三四五六'.charAt(dow_(date)) + '）';
+}
+
+/* ============================== 初次設定 ============================== */
+
+/** 第一次使用時，在 Apps Script 編輯器選 setup 按執行。已有資料的工作表不會被覆蓋。 */
+function setup() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ss.setSpreadsheetTimeZone(TZ);
+
+  const now = new Date();
+  const weekLater = new Date(now.getTime() + 7 * 864e5);
+
+  make_(ss, SH.SETTINGS, ['項目', '值', '說明'], [
+    ['劃假月份', '', '開放劃假的起始月份；空白＝自動從下個月開始（也可以填多個月份，用逗號分隔）'],
+    ['開放月數', 1, '從起始月份開始，一次開放幾個月'],
+    ['開放時間', fmt_(now, 'yyyy-MM-dd') + ' 00:00', '格式 2026-11-10 21:00（目前是測試用，正式使用請改成每月 10 日）'],
+    ['截止時間', fmt_(weekLater, 'yyyy-MM-dd') + ' 23:59', '格式 2026-11-15 23:59'],
+    ['每月休假天數', 8, '沒有另外設定的職務，每月這幾天都可以自排'],
+    ['職務自排公排', '', '格式 職務:自排天數:公排天數，多個用逗號分隔，例如 攝影師:5:3,安撫師:5:3'],
+    ['週末自選上限', 2, '週六＋週日合計最多可自選幾天'],
+    ['連休上限', 2, '超過這個天數的連休需主管同意，系統會擋下'],
+    ['不受週末上限職位', '客服,排版', '這些職位不套用週末自選上限，用逗號分隔'],
+    ['CLIENT_ID', '', 'Google Cloud 的 OAuth 用戶端 ID（要跟網頁裡填的一樣）'],
+    ['系統擁有者Email', '', '最高權限，可以在名額管理頁新增、移除管理員；只能在試算表這裡修改'],
+    ['管理員Email', '', '可以使用名額管理頁的 Google 帳號，多個用逗號分隔'],
+    ['門市清單', '台北,中壢,楊梅,竹北,台中', '名額管理頁顯示的門市'],
+    ['人員資料來源', '', '「小日子員工資料」試算表的網址或 ID；留空白＝只用「人員」表'],
+    ['人員資料工作表', '所有員工', '人員資料來源裡的工作表名稱']
+  ], { textCols: [2] });
+
+  make_(ss, SH.DEPT, ['部門', '門市', '說明'],
+    Object.keys(DEFAULT_DEPT).map(d => [d, DEFAULT_DEPT[d], DEFAULT_DEPT[d] ? '' : '空白＝這個部門不用劃假']), {});
+  make_(ss, SH.TITLE, ['職稱包含', '職位', '說明'],
+    DEFAULT_TITLE.map((r, i) => [r[0], r[1], i === 0 ? '職稱照順序比對，第一個對到的就是職位' : '']), {});
+
+  make_(ss, SH.STAFF, ['Email', '姓名', '職位', '門市', '啟用'], [
+    ['', '陳秀倩', '業務', '台北', true],
+    ['', '王國芬', '業務', '台北', true],
+    ['', '陳禹涵', '業務', '楊梅', true],
+    ['', '郭詩敏', '業務', '竹北', true],
+    ['', '金蓮娟', '業務', '中壢', true],
+    ['', '葉書妤', '安撫師', '楊梅', true],
+    ['', '徐沛淇', '安撫師', '楊梅', true],
+    ['', '鄭惠玲', '安撫師', '楊梅', true],
+    ['', '鍾亞真', '客服', '楊梅', true],
+    ['', '呂安淳', '客服', '楊梅', true],
+    ['', '陶冠宇', '排版', '楊梅', true],
+    ['', '姜宜妗', '排版', '楊梅', true]
+  ], { checkboxCol: 5 });
+
+  const all4 = '台北,中壢,楊梅,竹北';
+  make_(ss, SH.QUOTA, ['職位', '日別', '範圍', '門市', '名額', '備註'], [
+    ['攝影師', '平日', '各門市', '', 1, '週一到五，每間門市限休 1 名'],
+    ['攝影師', '六', '合計', '', 1, '全公司合計'],
+    ['攝影師', '日', '合計', '', 1, '全公司合計'],
+    ['安撫師', '平日', '各門市', '', 1, ''],
+    ['安撫師', '六', '各門市', '', 1, '每間門市各 1 名'],
+    ['安撫師', '日', '合計', all4, 2, '台中以外四店合計 2 名'],
+    ['安撫師', '日', '各門市', '台中', 1, '台中另計（請確認名額）'],
+    ['攝助', '平日', '各門市', '', 1, ''],
+    ['攝助', '六', '合計', '', 1, '全公司合計'],
+    ['攝助', '日', '合計', '', 1, '全公司合計'],
+    ['業務', '平日', '各門市', '', 1, ''],
+    ['業務', '六', '合計', '', 1, '全公司合計'],
+    ['業務', '日', '合計', '', 2, '全公司合計'],
+    ['客服', '平日', '各門市', '', 1, '請確認名額'],
+    ['客服', '六', '各門市', '', 1, '請確認名額'],
+    ['客服', '日', '各門市', '', 1, '請確認名額'],
+    ['排版', '平日', '各門市', '', 1, '請確認名額'],
+    ['排版', '六', '各門市', '', 1, '請確認名額'],
+    ['排版', '日', '各門市', '', 1, '請確認名額']
+  ], {});
+
+  make_(ss, SH.OVERRIDE, ['日期', '職位', '門市', '名額', '備註'], [
+    ['', '', '', '', '說明：特定日期改名額用。名額填 0 = 禁休；職位、門市空白 = 全部。例：2026-12-08｜業務｜（空白）｜0｜業務會議']
+  ], { textCols: [1] });
+
+  make_(ss, SH.HOLIDAY, ['日期', '名稱'], [], { textCols: [1] });
+  make_(ss, SH.BOOK, ['日期', 'Email', '姓名', '職位', '門市', '類型', '建立時間', '建立者'], [], { textCols: [1] });
+  make_(ss, SH.LOG, ['時間', 'Email', '姓名', '動作', '日期'], [], { textCols: [1, 5] });
+}
+
+function make_(ss, name, header, rows, opt) {
+  let sh = ss.getSheetByName(name);
+  if (sh && sh.getLastRow() > 1) return; // 已經有資料就不動
+  if (!sh) sh = ss.insertSheet(name);
+  (opt.textCols || []).forEach(c => sh.getRange(1, c, sh.getMaxRows(), 1).setNumberFormat('@'));
+  sh.getRange(1, 1, 1, header.length).setValues([header]).setFontWeight('bold').setBackground('#f3e7dc');
+  if (rows.length) {
+    if (opt.checkboxCol) sh.getRange(2, opt.checkboxCol, rows.length, 1).insertCheckboxes();
+    sh.getRange(2, 1, rows.length, header.length).setValues(rows);
+  }
+  sh.setFrozenRows(1);
+}

@@ -1,0 +1,73 @@
+rules_version = '2';
+// 小日子劃假系統（Firestore 版）安全規則
+// 重點：同仁只能劃／取消「自己的自排」，而且一定要在開放時間內、名額還有；設定和代排只有管理員能改。
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function email() {
+      return request.auth != null && request.auth.token.email_verified == true
+        ? request.auth.token.email.lower() : '';
+    }
+    function cfg() { return get(/databases/$(database)/documents/cfg/main).data; }
+    function isOwner() { return email() == 'xemepark@gmail.com'; }
+    function isAdmin() { return isOwner() || (email() != '' && email() in cfg().admins); }
+    function isStaff() {
+      return email() != '' && email() in cfg().staffMap && cfg().staffMap[email()].active == true;
+    }
+    function isMember() { return isAdmin() || isStaff(); }
+
+    // 設定：大家都能讀，只有管理員能改
+    match /cfg/{id} {
+      allow read: if isMember();
+      allow write: if isAdmin();
+    }
+
+    // 每個月的排休
+    match /months/{m} {
+      allow read: if isMember();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (isStaff() && staffChange(m));
+    }
+
+    // 同仁劃／取消自己的一筆自排
+    function staffChange(m) {
+      let c = cfg();
+      let me = email();
+      let now = request.time.toMillis();
+      let a = request.resource.data;
+      let b = resource.data;
+      let k = a.last.k;
+      let s = a.last.s;
+      return now >= c.window.openMs && now <= c.window.closeMs
+        && a.diff(b).affectedKeys().hasOnly(['b', 'c', 'last'])
+        && a.b.diff(b.b).affectedKeys().hasOnly([k])
+        && a.c.diff(b.c).affectedKeys().hasOnly([s])
+        && (a.last.op == 'add'
+              ? staffAdd(m, a, b, k, s, me, c.staffMap[me])
+              : (a.last.op == 'del' && staffDel(a, b, k, s, me)));
+    }
+    function staffAdd(m, a, b, k, s, me, st) {
+      let e = a.b[k];
+      return !(k in b.b) && (k in a.b)
+        && e.e == me && e.by == me && e.t == '自排'
+        && e.r == st.role && e.st == st.store && e.sl == s
+        && k == e.d + '_' + me
+        && e.d.matches(m + '-[0-9][0-9]')
+        && b.pm[e.d + '|' + st.role + '|' + st.store] == s
+        && a.c[s] == b.c.get(s, 0) + 1
+        && (b.q[s] < 0 || a.c[s] <= b.q[s]);
+    }
+    function staffDel(a, b, k, s, me) {
+      let e = b.b[k];
+      return (k in b.b) && !(k in a.b)
+        && e.e == me && e.by == me && e.t == '自排' && e.sl == s
+        && a.c[s] == b.c[s] - 1;
+    }
+
+    // 操作紀錄：只能用自己的名字新增，管理員能看
+    match /logs/{id} {
+      allow create: if email() != '' && request.resource.data.email == email();
+      allow read: if isAdmin();
+    }
+  }
+}
