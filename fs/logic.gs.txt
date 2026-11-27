@@ -1355,6 +1355,8 @@ const FS_PROJECT = 'smallday-leave';
 const FS_VERSION_ = '1.1.0';
 const FS_BASE_ = 'https://firestore.googleapis.com/v1/projects/' + FS_PROJECT + '/databases/(default)/documents';
 
+/** 第一次使用（或授權不完整）時先執行這個，會跳出 Google 授權畫面，把 Firestore 權限一起勾選 */
+function authorizeFirestore() { ScriptApp.requireAllScopes(ScriptApp.AuthMode.FULL); return '授權完成'; }
 function syncAllToFirestore() { return fsSyncAll_(false); }
 function syncAllToFirestoreForce() { return fsSyncAll_(true); }
 
