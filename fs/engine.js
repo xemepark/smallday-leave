@@ -296,7 +296,7 @@
       el.appendChild(b);
     },
     prompt() { if (auth.currentUser && cb) cb({ credential: fakeToken(authEmail()) }); },
-    disableAutoSelect() { auth.signOut().catch(() => {}); }
+    disableAutoSelect() { if (!cfg && authEmail() === OWNER) return; auth.signOut().catch(() => {}); }
   } } };
 
   let started = false;
