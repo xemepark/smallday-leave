@@ -9,7 +9,7 @@
  *           所以只能劃自己的假，不能代填。
  */
 
-const VERSION = '2.7.0';
+const VERSION = '2.7.1';
 const TZ = 'Asia/Taipei';
 const SH = {
   SETTINGS: '設定',
@@ -437,19 +437,23 @@ function adminSetOrder_(admin, req) {
     if (!emails.length) fail_('至少要指定一位排順序的同仁', 'BAD_REQUEST');
     emails.push(FREE_MARK_);
   }
+  // 順序套用到所有開放劃假的月份：還沒輪到的人，哪個月份都不能劃
+  const open = getSettings_().months || [];
+  const list = open.indexOf(month) >= 0 ? open.slice() : [month];
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) fail_('系統忙碌中，請過幾秒再試', 'BUSY');
   try {
     const sh = ensureSheet_(SH.ORDER, ORDER_HEADER_);
-    deleteRowsWhere_(sh, r => toMonth_(r[0]) === month && String(r[1]).trim() === role && String(r[2]).trim() === store);
-    if (emails) sh.appendRow([month, role, store, emails.join(',')]);
-    log_({ email: admin, name: '管理員' }, emails ? '設定劃假順序' : '取消劃假順序', month + '｜' + store + role);
+    deleteRowsWhere_(sh, r => list.indexOf(toMonth_(r[0])) >= 0 && String(r[1]).trim() === role && String(r[2]).trim() === store);
+    if (emails) list.forEach(m => sh.appendRow([m, role, store, emails.join(',')]));
+    log_({ email: admin, name: '管理員' }, emails ? '設定劃假順序' : '取消劃假順序', list.join('、') + '｜' + store + role);
     SpreadsheetApp.flush();
   } finally {
     lock.releaseLock();
   }
   afterWrite_([SH.ORDER]);
-  return Object.assign(adminRoster_(admin, month), { message: emails ? '已儲存 ' + store + role + '的劃假順序' : '已取消 ' + store + role + '的劃假順序' });
+  const ms = list.map(m => Number(m.slice(5)) + ' 月').join('、');
+  return Object.assign(adminRoster_(admin, month), { message: (emails ? '已儲存 ' : '已取消 ') + store + role + '的劃假順序（' + ms + '）' });
 }
 /** 管理員幫同仁送出（卡住時）或撤回送出（讓他再改） */
 function adminSubmitFor_(admin, req) {

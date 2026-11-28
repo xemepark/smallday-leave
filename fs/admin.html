@@ -756,6 +756,7 @@ function renderOrder(r){
   if (og.overridden) box.appendChild(el('div', 'tag warn', '這個職務已經啟用「全公司」順序，同仁會照全公司那條輪；這裡的門市順序先不管，取消全公司順序後才會恢復。'));
   else if (og.all && !og.active) box.appendChild(el('div', 'tag', '全公司順序：所有門市的這個職務排成一條，一次只有一個人能劃。啟用後，各門市的順序先暫停。'));
   box.appendChild(el('div', 'tag', og.active ? '輪到的人按「送出」後才換下一位；卡住的話可以按「代送出」。' : '還沒啟用：這組同仁現在不用排隊。用 ↑↓ 排好順序後按「啟用」。'));
+  box.appendChild(el('div', 'tag', '順序會同時套用到所有開放劃假的月份；還沒輪到的人，哪個月份都不能劃。'));
   box.appendChild(el('div', 'tag', '只想指定部分人：按「不排」把人移到下面的「自由搶」區，指定的人都送出後，自由搶區的人才開放一起搶。'));
   const ol = el('ul', 'ol');
   const subs = r.submits || {};
