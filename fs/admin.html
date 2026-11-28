@@ -60,6 +60,7 @@
   .ol li{display:flex;align-items:center;gap:6px;padding:6px 0;border-top:1px dashed var(--line);font-size:14px}
   .ol li .no{width:22px;color:var(--sub);text-align:right} .ol li .nm{flex:1} .ol li .st{font-size:12px;color:var(--sub)}
   .ol li.turn .nm{color:var(--ok);font-weight:700} .ol li.sub .nm{color:var(--sub)}
+  .ol li.freehd{color:#9a5b00;background:#fff6d1;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:700;border-top:none;margin-top:6px} .ol li.free .nm{color:var(--sub)}
   .lv{position:relative}
   .lv.adm::after{content:'';position:absolute;top:-4px;right:-4px;width:8px;height:8px;border-radius:50%;background:#7b5ea7;border:1.5px solid #fff}
   .bytag{font-size:11px;color:#7b5ea7;margin-left:4px}
@@ -268,7 +269,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s .8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
-<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128e';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128f';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 <div class="wrap">
@@ -710,33 +711,55 @@ function renderOrder(r){
   sel.onchange = () => { state.oGroup = sel.value; state.oDraft = null; renderOrder(r); };
   bar.appendChild(sel);
   const og = r.orders[state.oGroup];
-  if (!state.oDraft || state.oDraft.g !== state.oGroup + '|' + r.month) state.oDraft = { g: state.oGroup + '|' + r.month, list: og.list.slice(), dirty: false };
+  if (!state.oDraft || state.oDraft.g !== state.oGroup + '|' + r.month) state.oDraft = { g: state.oGroup + '|' + r.month, list: og.list.slice(), n: og.active ? og.n : og.list.length, dirty: false };
   const dr = state.oDraft;
   const save = el('button', 'save', og.active ? (dr.dirty ? '儲存新順序' : '已照這個順序') : '啟用：照這個順序劃假');
-  save.onclick = () => orderAct({ emails: dr.list });
+  save.disabled = !dr.n;
+  save.onclick = () => orderAct({ emails: dr.list.slice(0, dr.n), free: dr.n < dr.list.length });
   bar.appendChild(save);
   if (og.active){ const off = el('button', '', '取消順序（大家都能劃）'); off.onclick = () => orderAct({ emails: null }); bar.appendChild(off); }
   box.appendChild(bar);
   if (og.overridden) box.appendChild(el('div', 'tag warn', '這個職務已經啟用「全公司」順序，同仁會照全公司那條輪；這裡的門市順序先不管，取消全公司順序後才會恢復。'));
   else if (og.all && !og.active) box.appendChild(el('div', 'tag', '全公司順序：所有門市的這個職務排成一條，一次只有一個人能劃。啟用後，各門市的順序先暫停。'));
   box.appendChild(el('div', 'tag', og.active ? '輪到的人按「送出」後才換下一位；卡住的話可以按「代送出」。' : '還沒啟用：這組同仁現在不用排隊。用 ↑↓ 排好順序後按「啟用」。'));
+  box.appendChild(el('div', 'tag', '只想指定部分人：按「不排」把人移到下面的「自由搶」區，指定的人都送出後，自由搶區的人才開放一起搶。'));
   const ol = el('ul', 'ol');
   const subs = r.submits || {};
+  const freeHead = () => { const li = el('li', 'freehd'); li.appendChild(el('span', 'nm', '▼ 自由搶（指定的人都送出後才開放，先劃先贏）')); return li; };
+  const move = (from, to) => { const l = dr.list; const [x] = l.splice(from, 1); l.splice(to, 0, x); };
   dr.list.forEach((e, i) => {
+    if (i === dr.n) ol.appendChild(freeHead());
+    if (i >= dr.n) {
+      const li = el('li', 'free' + (subs[e] ? ' sub' : ''));
+      li.appendChild(el('span', 'no', '・'));
+      li.appendChild(el('span', 'nm', nameOf(e)));
+      li.appendChild(el('span', 'st', subs[e] ? '✓ 已送出' : ''));
+      const add = el('button', '', '加入順序');
+      add.onclick = () => { move(i, dr.n); dr.n++; dr.dirty = true; renderOrder(r); };
+      li.appendChild(add);
+      const sb2 = el('button', '', subs[e] ? '撤回' : '代送出');
+      sb2.onclick = () => submitForAct(e, !subs[e], nameOf(e));
+      li.appendChild(sb2);
+      ol.appendChild(li);
+      return;
+    }
     const li = el('li', (og.active && og.turn === e ? 'turn' : '') + (subs[e] ? ' sub' : ''));
     li.appendChild(el('span', 'no', String(i + 1)));
     li.appendChild(el('span', 'nm', nameOf(e)));
     li.appendChild(el('span', 'st', subs[e] ? '✓ 已送出 ' + (subs[e].at || '').slice(5) + (subs[e].by && subs[e].by !== e ? '（代送出）' : '') : (og.active && og.turn === e ? '← 劃假中' : '')));
     const up = el('button', '', '↑'); up.disabled = i === 0;
     up.onclick = () => { const l = dr.list; [l[i - 1], l[i]] = [l[i], l[i - 1]]; dr.dirty = true; renderOrder(r); };
-    const dn = el('button', '', '↓'); dn.disabled = i === dr.list.length - 1;
+    const dn = el('button', '', '↓'); dn.disabled = i >= dr.n - 1;
     dn.onclick = () => { const l = dr.list; [l[i + 1], l[i]] = [l[i], l[i + 1]]; dr.dirty = true; renderOrder(r); };
-    li.appendChild(up); li.appendChild(dn);
+    const out = el('button', '', '不排');
+    out.onclick = () => { move(i, dr.n - 1); dr.n--; dr.dirty = true; renderOrder(r); };
+    li.appendChild(up); li.appendChild(dn); li.appendChild(out);
     const sb = el('button', '', subs[e] ? '撤回' : '代送出');
     sb.onclick = () => submitForAct(e, !subs[e], nameOf(e));
     li.appendChild(sb);
     ol.appendChild(li);
   });
+  if (dr.n === 0) ol.insertBefore(el('li', 'freehd', '請至少留一位在順序裡'), ol.firstChild);
   box.appendChild(ol);
 }
 async function orderAct(extra){

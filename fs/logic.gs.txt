@@ -9,7 +9,7 @@
  *           所以只能劃自己的假，不能代填。
  */
 
-const VERSION = '2.6.0';
+const VERSION = '2.6.1';
 const TZ = 'Asia/Taipei';
 const SH = {
   SETTINGS: '設定',
@@ -307,11 +307,16 @@ function myGroup_(me, orders) {
   const cg = me.role + '|' + ALL_STORES_;
   return orders[cg] ? cg : me.role + '|' + me.store;
 }
-/** 某一組的完整順序：管理員排的在前，其他同組同仁照人員表順序接在後面（門市＝全公司：所有門市同職務） */
-function groupOrder_(g, orders, staff) {
+const FREE_MARK_ = '*';   // 順序最後放 * ＝ 指定的人劃完後，其他人自由搶
+function orderFree_(orders, g) { return !!orders[g] && orders[g].indexOf(FREE_MARK_) >= 0; }
+/** 某一組的順序：管理員排的在前；沒排到的人照人員表順序接在後面一起排隊，
+ *  或（設定「其他人自由搶」時）不排隊。full＝一律回傳全部人（管理畫面用）
+ *  門市＝全公司：所有門市同職務 */
+function groupOrder_(g, orders, staff, full) {
   const role = g.split('|')[0], store = g.split('|')[1];
   const members = staff.filter(p => p.email && p.role === role && (store === ALL_STORES_ ? !!p.store : p.store === store)).map(p => normEmail_(p.email));
   const head = (orders[g] || []).filter(e => members.indexOf(e) >= 0);
+  if (orderFree_(orders, g) && !full) return head;
   return head.concat(members.filter(e => head.indexOf(e) < 0));
 }
 /** 每組現在輪到誰（全部送出＝''） */
@@ -337,9 +342,11 @@ function assertMyTurn_(me, month) {
   if (!orders[g]) return;
   const list = groupOrder_(g, orders, getStaff_());
   const t = list.find(e => !subs[e]) || '';
-  if (t !== me.email) {
+  if (t && t !== me.email) {
     const who = getStaff_().find(p => normEmail_(p.email) === t);
-    fail_('還沒輪到你劃假，目前輪到 ' + (who ? who.name : t) + '（你排第 ' + (list.indexOf(me.email) + 1) + ' 位）', 'NOT_YOUR_TURN');
+    const i = list.indexOf(me.email);
+    fail_('還沒輪到你劃假，目前輪到 ' + (who ? who.name : t) +
+      (i >= 0 ? '（你排第 ' + (i + 1) + ' 位）' : '（指定順序的人都送出後，就開放大家自由劃）'), 'NOT_YOUR_TURN');
   }
 }
 function turnView_(me, month) {
@@ -353,9 +360,11 @@ function turnView_(me, month) {
   const list = groupOrder_(g, orders, staff);
   const t = list.find(e => !subs[e]) || '';
   const nameOf = e => { const p = staff.find(x => normEmail_(x.email) === e); return p ? p.name + (all && p.store ? '（' + p.store + '）' : '') : e; };
+  out.free = orderFree_(orders, g);
+  out.freeNow = out.free && !t;
   out.myIndex = list.indexOf(me.email) + 1;
   out.total = list.length;
-  out.isMyTurn = t === me.email;
+  out.isMyTurn = t === me.email || !t;
   out.turnName = t ? nameOf(t) : '';
   out.list = list.map(e => ({ name: nameOf(e), submitted: !!subs[e], turn: e === t, me: e === me.email }));
   return out;
@@ -415,7 +424,11 @@ function adminSetOrder_(admin, req) {
   const month = toMonth_(req.month);
   const role = String(req.role || '').trim(), store = String(req.store || '').trim();
   if (!month || !role || !store) fail_('請選月份、職務、門市', 'BAD_REQUEST');
-  const emails = Array.isArray(req.emails) ? req.emails.map(normEmail_).filter(Boolean) : null;
+  const emails = Array.isArray(req.emails) ? req.emails.map(normEmail_).filter(e => e && e !== FREE_MARK_) : null;
+  if (emails && req.free) {
+    if (!emails.length) fail_('至少要指定一位排順序的同仁', 'BAD_REQUEST');
+    emails.push(FREE_MARK_);
+  }
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) fail_('系統忙碌中，請過幾秒再試', 'BUSY');
   try {
@@ -903,10 +916,12 @@ function rosterOrders_(month, staff) {
   const groups = {};
   staff.forEach(p => { if (p.email && p.role && p.store) { groups[p.role + '|' + ALL_STORES_] = 1; groups[p.role + '|' + p.store] = 1; } });
   Object.keys(groups).forEach(g => {
-    const list = groupOrder_(g, orders, staff);
-    const t = orders[g] ? (list.find(e => !subs[e]) || '') : '';
+    const list = groupOrder_(g, orders, staff, true);
+    const q = groupOrder_(g, orders, staff);
+    const t = orders[g] ? (q.find(e => !subs[e]) || '') : '';
     const all = g.split('|')[1] === ALL_STORES_;
-    out[g] = { active: !!orders[g], list: list, turn: t, all: all, overridden: !all && !!orders[g.split('|')[0] + '|' + ALL_STORES_] };
+    const free = orderFree_(orders, g);
+    out[g] = { active: !!orders[g], list: list, turn: t, all: all, free: free, n: free ? q.length : list.length, overridden: !all && !!orders[g.split('|')[0] + '|' + ALL_STORES_] };
   });
   return out;
 }

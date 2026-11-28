@@ -64,7 +64,7 @@ service cloud.firestore {
       let g = grp(b, st);
       let turn = b.get('turn', {});
       return !(t == '自排' || t == '許願')
-        || (!(me in b.get('sub', {})) && (!(g in turn) || turn[g] == me));
+        || (!(me in b.get('sub', {})) && (!(g in turn) || turn[g] == me || turn[g] == ''));
     }
     // 送出：只能加自己的送出紀錄、把自己這組換到下一位
     function staffSubmit(m) {
@@ -83,7 +83,7 @@ service cloud.firestore {
         && a.last.op == 'submit'
         && as.diff(bs).affectedKeys().hasOnly([me]) && (me in as) && !(me in bs)
         && at.diff(bt).affectedKeys().hasOnly([g])
-        && ((g in bt) ? (bt[g] == me && nextOk(b, g, me, at.get(g, ''))) : !(g in at));
+        && ((g in bt && bt[g] != '') ? (bt[g] == me && nextOk(b, g, me, at.get(g, ''))) : at.get(g, '-') == bt.get(g, '-'));
     }
     // 下一位：順序裡的下一個人；如果他已經被代送出，可以跳到後面還沒送出的人
     function nextOk(b, g, me, t) {
