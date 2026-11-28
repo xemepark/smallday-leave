@@ -46,6 +46,9 @@
   .lv-apply{background:#fff;color:var(--ov);border:1.5px dashed var(--ov)}
   .lv-kind{background:var(--ov-bg);color:var(--ov);border:1px solid var(--ov)}
   .card2{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:12px}
+  .rulesum .rs{display:flex;gap:8px;font-size:14px;padding:4px 0;border-top:1px dashed var(--line)} .rulesum .rs b{min-width:56px} .rulesum .rs span{color:var(--sub)}
+  .rsbtn{margin-top:8px;font:inherit;font-size:14px;border:1px solid var(--accent);color:var(--accent);background:var(--card);border-radius:10px;padding:7px 12px;cursor:pointer}
+  .steph{margin:4px 0 8px;font-size:15px} .steph small{color:var(--sub);font-weight:400;margin-left:6px;font-size:13px}
   .card2 h3{margin:0 0 6px;font-size:15px} .card2 h3 small{color:var(--sub);font-weight:400;margin-left:6px}
   .card2 summary{cursor:pointer;font-weight:700;font-size:15px}
   .rv{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px dashed var(--line);font-size:14px;flex-wrap:wrap}
@@ -276,7 +279,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s .8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
-<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128r';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128s';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 <div class="wrap">
@@ -308,17 +311,23 @@
       <span class="tag" id="bookingTag"></span>
     </div>
 
-    <div class="legend" id="quotaLegend">
-      <span><i style="background:var(--ov-bg);border-color:var(--ov)"></i>特別設定（日期覆寫）</span>
-      <span><i style="background:var(--full-bg)"></i>0 = 禁休</span>
-      <span><i style="background:#eaf3ec;border-color:#4f8a5b"></i>休 = 全公司公休</span>
-      <span>不限 = 不受名額控制的職務</span>
-      <span>數字＝可休人數，下面小字＝已排人數</span>
-    </div>
 
     <div id="quotaView">
+      <div class="card2 rulesum" id="ruleSum">
+        <h3>① 預設規則<small>平常每天各職務可以休幾人，每個月都照這個走</small></h3>
+        <div id="ruleSumBody"></div>
+        <button type="button" class="rsbtn" id="ruleEdit">✏️ 編輯預設規則</button>
+      </div>
+      <h3 class="steph">② 單日微調<small>某一天要跟預設不一樣（檔期、活動、過年），點那一格或那天的日期改</small></h3>
+      <div class="legend" id="quotaLegend">
+        <span><i style="background:var(--ov-bg);border-color:var(--ov)"></i>特別設定（日期覆寫）</span>
+        <span><i style="background:var(--full-bg)"></i>0 = 禁休</span>
+        <span><i style="background:#eaf3ec;border-color:#4f8a5b"></i>休 = 全公司公休</span>
+        <span>不限 = 不受名額控制的職務</span>
+        <span>數字＝可休人數，下面小字＝已排人數</span>
+      </div>
       <div class="tablewrap"><table id="grid"></table></div>
-      <div class="hint">點任一格就能改那天、那個職位的名額。<b>點上面的日期</b>可以把那天設成「全公司禁休」或「全公司公休」（例如過年）。沒有特別設定的格子，用的是「名額規則」的預設值。</div>
+      <div class="hint">點任一格就能改那天、那個職位的名額。<b>點上面的日期</b>可以把那天設成「全公司禁休」或「全公司公休」（例如過年）。沒有特別設定的格子，用的是上面「① 預設規則」。</div>
     </div>
     <div id="rosterView" class="hidden">
       <div class="legend">
@@ -538,8 +547,8 @@
 </div>
 
 <div id="rulesPanel" class="modal" role="dialog" aria-modal="true">
-  <h2>職務與每日名額</h2>
-  <div class="meta">勾選的職務每天休假有人數限制；沒勾的職務每天不限人數（每人每月自排、週末、連休上限照算）。特定日期要例外，到「名額設定」點那一格改。<br><a href="#quota" style="color:var(--accent);font-weight:700">👉 設定某一天某職務只能休幾人（去名額設定）</a></div>
+  <h2>預設規則：各職務每天可休幾人</h2>
+  <div class="meta">勾選的職務每天休假有人數限制；沒勾的職務每天不限人數（每人每月自排、週末、連休上限照算）。某一天要例外，儲存後在名額設定的表格點那一格改。</div>
   <div id="rList"></div>
   <div class="btns" style="margin-top:12px">
     <button class="btn ghost" id="rCancel">取消</button>
@@ -598,13 +607,13 @@ async function applyHash(){
   if (h === 'admins' && !state.me.owner) h = 'quota';
   closePanel(true);
   // 系統設定、管理員是彈出面板，背後維持目前的畫面
-  const v = h === 'roster' ? 'roster' : h === 'quota' ? 'quota' : (state.data || state.roster ? state.view : 'quota');
+  const v = h === 'roster' ? 'roster' : (h === 'quota' || h === 'rules') ? 'quota' : (state.data || state.roster ? state.view : 'quota');
   await setView(v);
   if (h === 'settings' && state.data) openSettings();
   if (h === 'admins' && state.data) openAdmins();
   if (h === 'rules' && state.data) openRules();
   if (h === 'dperm') location.replace('../admin.html#dperm');
-  renderMenu(h);
+  renderMenu(h === 'rules' ? 'quota' : h);
 }
 window.addEventListener('hashchange', () => { if (state.me) applyHash(); });
 
@@ -613,7 +622,6 @@ const NAV = [
   { id: 'leave',    label: '我的劃假', href: 'index.html',         show: me => me.staff },
   { id: 'roster',   label: '排休總表', href: 'admin.html#roster',   show: me => me.admin },
   { id: 'quota',    label: '名額設定', href: 'admin.html#quota',    show: me => me.admin },
-  { id: 'rules',    label: '職務名額', href: 'admin.html#rules',    show: me => me.admin },
   { id: 'settings', label: '系統設定', href: 'admin.html#settings', show: me => me.admin },
   { id: 'admins',   label: '管理員',   href: 'admin.html#admins',   show: me => me.owner },
   { id: 'dispatch', label: '派工',     href: '../dispatch.html',       show: me => me.admin },
@@ -985,6 +993,7 @@ async function setLeave(type, force){
 /* ===== 畫面 ===== */
 function render(d){
   state.data = d; state.month = d.month;
+  renderRuleSum(d);
   if (!state.store || d.stores.indexOf(state.store) < 0) state.store = d.stores[0];
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
   $('#who').textContent = d.admin;
@@ -1353,6 +1362,24 @@ function buildRulesModel(){
   });
   state.rm = { controlled: new Set(rc.controlled), model };
 }
+/** 名額設定上方的「預設規則」摘要 */
+function renderRuleSum(d){
+  const box = $('#ruleSumBody'); if (!box || !d || !d.rulesConfig) return;
+  box.textContent = '';
+  const rc = d.rulesConfig, ctl = new Set(rc.controlled), free = [];
+  d.roles.forEach(role => {
+    if (!ctl.has(role)){ free.push(role); return; }
+    const parts = DAYS3.map(([dt, label]) => {
+      const rs = rc.rules.filter(r => r.role === role && r.dayType === dt);
+      const pr = rs.find(r => r.scope === '合計') || rs.find(r => !r.stores.length) || rs[0];
+      if (!pr) return label + ' －';
+      const ex = rs.filter(r => r !== pr).map(r => r.stores.join('、') + ' ' + r.quota);
+      return label + ' ' + (pr.scope === '合計' ? '全公司合計 ' : '每店 ') + pr.quota + ' 人' + (ex.length ? '（' + ex.join('；') + '）' : '');
+    });
+    const row = el('div', 'rs'); row.appendChild(el('b', '', role)); row.appendChild(el('span', '', parts.join('・'))); box.appendChild(row);
+  });
+  if (free.length){ const row = el('div', 'rs'); row.appendChild(el('b', '', '不限人數')); row.appendChild(el('span', '', free.join('、'))); box.appendChild(row); }
+}
 function openRules(){
   buildRulesModel(); renderRules();
   $('#backdrop').classList.add('show'); $('#rulesPanel').classList.add('show');
@@ -1707,6 +1734,7 @@ $('#sCancel').onclick = closePanel;
 $('#dCancel').onclick = closePanel;
 $('#rCancel').onclick = closePanel;
 $('#rSave').onclick = saveRules;
+$('#ruleEdit').onclick = () => { if (state.data) openRules(); };
 $('#byDateBtn').onclick = openList;
 $('#liOnly').onchange = fillList;
 $('#liClose').onclick = closePanel;
