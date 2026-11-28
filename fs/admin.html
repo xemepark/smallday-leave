@@ -105,6 +105,8 @@
   .chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 14px;cursor:pointer;font:inherit;color:var(--ink)}
   .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
   .tag{font-size:12px;color:var(--sub)} .tag.warn{color:#9a5b00;background:#fff6d1;border-radius:8px;padding:6px 8px;margin:4px 0}
+  .secthd{margin:18px 0 4px;padding-top:14px;border-top:2px dashed var(--line);font-size:13px;font-weight:700;color:var(--accent)}
+  .ordmonths{display:flex;gap:6px;margin:6px 0} .ordmonths button{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:999px;padding:4px 12px;background:var(--card)} .ordmonths button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
   .testadm{background:#fff3f0;border:1.5px solid #c8553d;border-radius:14px;padding:10px 12px;margin-bottom:12px;display:grid;gap:8px;font-size:14px}
   .testadm .trow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .testadm small{color:var(--sub);font-size:12px;flex-basis:100%}
   .testadm select,.testadm button{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:5px 10px;background:var(--card);max-width:100%}
@@ -273,7 +275,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s .8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
-<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128m';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128n';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 <div class="wrap">
@@ -292,24 +294,12 @@
     </header>
 
     <nav class="menu" id="menu"></nav>
-
-    <div class="modebar" id="modeBar">
+    <div class="modebar hidden" id="modeBar">
       <div class="mstate" id="modeState"><i></i><div><b id="modeTitle"></b><small id="modeSub"></small></div></div>
       <div class="seg"><button type="button" id="modeEdit">到系統設定切換</button></div>
-      <details class="syncbox" id="syncBox">
-        <summary>跟 Google 試算表同步</summary>
-        <div class="syncrow">
-          <button type="button" data-op="pull"><b>Firestore → 試算表</b><small>把最新的劃假紀錄、設定寫回試算表（每天凌晨 3 點也會自動做）</small></button>
-          <button type="button" data-op="push"><b>試算表 → Firestore（只有設定）</b><small>名額、公休、系統設定、人員；劃假紀錄不動。開放中也可以用</small></button>
-          <button type="button" data-op="pushAll"><b>試算表 → Firestore（含劃假紀錄）</b><small>以試算表為準覆蓋劃假紀錄，要先「手動暫停」</small></button>
-        </div>
-      </details>
+
     </div>
 
-    <div class="testadm hidden" id="testAdm">
-      <div class="trow" id="tOwnerRow"><b>系統模式</b><div class="seg2"><button type="button" data-t="0">上線模式</button><button type="button" data-t="1">測試模式</button></div><small id="tModeNote"></small></div>
-      <div class="trow hidden" id="tActRow"><b>🧪 模擬同仁</b><select id="tStaff"></select><button type="button" id="tGo">用他的身分開啟同仁畫面</button><small>會看到那位同仁的完整畫面，劃假、許願、送出都會真的寫入（紀錄會標示是測試模擬）</small></div>
-    </div>
 
     <div class="bar">
       <div class="month"><button id="prev" aria-label="上個月">‹</button><b id="monthLabel"></b><button id="next" aria-label="下個月">›</button></div>
@@ -339,7 +329,6 @@
         <span><span class="lv lv-公休">休</span> 全公司公休</span>
       </div>
       <div class="card2 hidden" id="reviewBox"></div>
-      <details class="card2" id="orderBox"><summary>劃假順序與送出狀況</summary><div id="orderIn"></div></details>
       <div class="rtools">
         <button id="byDateBtn">📅 依日期列出：每天誰休</button>
         <span class="tag" style="align-self:center">點同仁名字＝看他這個月的排休</span>
@@ -431,6 +420,36 @@
   <div class="field">
     <label>各職務自排／公排天數（沒勾的職務＝每月休假天數全部都可以自排）</label>
     <div id="sRoles"></div>
+  </div>
+
+  <div class="secthd">以下功能按了就立即生效，不用按「儲存」</div>
+
+  <div class="field">
+    <label>劃假順序與送出狀況</label>
+    <div class="subnote">順序會同時套用到所有開放劃假的月份，還沒輪到的人哪個月份都不能劃；送出狀況每個月分開看。</div>
+    <div class="ordmonths" id="orderMonths"></div>
+    <div id="orderIn"></div>
+  </div>
+
+  <div class="field" id="testField">
+    <label>測試模式</label>
+    <div class="testadm" id="testAdm">
+      <div class="trow" id="tOwnerRow"><b>系統模式</b><div class="seg2"><button type="button" data-t="0">上線模式</button><button type="button" data-t="1">測試模式</button></div><small id="tModeNote"></small></div>
+      <div class="trow hidden" id="tActRow"><b>🧪 模擬同仁</b><select id="tStaff"></select><button type="button" id="tGo">用他的身分開啟同仁畫面</button><small>會看到那位同仁的完整畫面，劃假、許願、送出都會真的寫入（紀錄會標示是測試模擬）</small></div>
+    </div>
+
+  </div>
+
+  <div class="field" id="syncField">
+    <label>跟 Google 試算表同步（只有系統擁有者看得到）</label>
+      <details class="syncbox" id="syncBox" open>
+        <summary>跟 Google 試算表同步</summary>
+        <div class="syncrow">
+          <button type="button" data-op="pull"><b>Firestore → 試算表</b><small>把最新的劃假紀錄、設定寫回試算表（每天凌晨 3 點也會自動做）</small></button>
+          <button type="button" data-op="push"><b>試算表 → Firestore（只有設定）</b><small>名額、公休、系統設定、人員；劃假紀錄不動。開放中也可以用</small></button>
+          <button type="button" data-op="pushAll"><b>試算表 → Firestore（含劃假紀錄）</b><small>以試算表為準覆蓋劃假紀錄，要先「手動暫停」</small></button>
+        </div>
+      </details>
   </div>
 
   <div class="btns">
@@ -637,7 +656,7 @@ async function api(action, extra){
 function renderTestAdm(fs){
   state.fs = fs;
   const box = $('#testAdm');
-  box.classList.toggle('hidden', !(fs.owner || fs.test));
+  $('#testField').classList.toggle('hidden', !(fs.owner || fs.test));
   $('#tOwnerRow').classList.toggle('hidden', !fs.owner);
   box.querySelectorAll('.seg2 button').forEach(b => b.classList.toggle('on', (b.dataset.t === '1') === !!fs.test));
   $('#tModeNote').textContent = fs.test ? '測試模式中：管理員可以模擬任何一位同仁。正式開放前記得切回上線模式，並清掉測試時劃的假。' : '上線模式：大家只能用自己的身分。要讓管理員模擬同仁測試，切到測試模式。';
@@ -756,7 +775,6 @@ function renderOrder(r){
   if (og.overridden) box.appendChild(el('div', 'tag warn', '這個職務已經啟用「全公司」順序，同仁會照全公司那條輪；這裡的門市順序先不管，取消全公司順序後才會恢復。'));
   else if (og.all && !og.active) box.appendChild(el('div', 'tag', '全公司順序：所有門市的這個職務排成一條，一次只有一個人能劃。啟用後，各門市的順序先暫停。'));
   box.appendChild(el('div', 'tag', og.active ? '輪到的人按「送出」後才換下一位；卡住的話可以按「代送出」。' : '還沒啟用：這組同仁現在不用排隊。用 ↑↓ 排好順序後按「啟用」。'));
-  box.appendChild(el('div', 'tag', '順序會同時套用到所有開放劃假的月份；還沒輪到的人，哪個月份都不能劃。'));
   box.appendChild(el('div', 'tag', '只想指定部分人：按「不排」把人移到下面的「自由搶」區，指定的人都送出後，自由搶區的人才開放一起搶。'));
   const ol = el('ul', 'ol');
   const subs = r.submits || {};
@@ -797,6 +815,36 @@ function renderOrder(r){
   if (dr.n === 0) ol.insertBefore(el('li', 'freehd', '請至少留一位在順序裡'), ol.firstChild);
   box.appendChild(ol);
 }
+/** 系統設定裡的劃假順序：排休總表開著就一起更新，不然只更新順序區 */
+function afterOrder(r){
+  if (state.view === 'roster' && (!state.month || state.month === r.month)) renderRoster(r);
+  else { state.roster = r; renderOrder(r); }
+  paintOrderMonths(r.month);
+}
+function openMonths(){
+  const c = (state.data && state.data.config) || {};
+  const start = c.startMonth || addMonths(thisMonth(), 1);
+  const out = []; for (let i = 0; i < Math.max(1, c.monthCount || 1); i++) out.push(addMonths(start, i));
+  return out;
+}
+function paintOrderMonths(cur){
+  const box = $('#orderMonths'); box.textContent = '';
+  const ms = openMonths();
+  if (ms.length < 2) return;
+  ms.forEach(m => {
+    const b = el('button', m === cur ? 'on' : '', Number(m.slice(5)) + ' 月送出狀況');
+    b.type = 'button';
+    b.onclick = () => loadOrderMonth(m);
+    box.appendChild(b);
+  });
+}
+async function loadOrderMonth(m){
+  if (state.busy) return;
+  if (state.roster && state.roster.month === m){ renderOrder(state.roster); paintOrderMonths(m); return; }
+  $('#orderIn').textContent = '讀取中…';
+  try { const r = await api('adminRoster', { month: m }); afterOrder(r); }
+  catch(e){ $('#orderIn').textContent = ''; handleError(e); }
+}
 async function orderAct(extra){
   if (state.busy) return;
   const [role, store] = state.oGroup.split('|');
@@ -804,7 +852,7 @@ async function orderAct(extra){
   try {
     const r = await api('adminSetOrder', Object.assign({ month: state.roster.month, role, store }, extra));
     state.oDraft = null;
-    renderRoster(r.people ? r : await api('adminRoster', { month: state.roster.month }));
+    afterOrder(r.people ? r : await api('adminRoster', { month: state.roster.month }));
     toast(r.message || '已儲存');
   } catch(e){ handleError(e); }
   finally { setBusy(false); }
@@ -814,7 +862,7 @@ async function submitForAct(email, submit, name){
   setBusy(true);
   try {
     const r = await api('adminSubmitFor', { month: state.roster.month, key: email, submit });
-    renderRoster(r);
+    afterOrder(r);
     toast(r.message || (submit ? '已代 ' + name + ' 送出' : '已撤回'));
   } catch(e){ handleError(e); }
   finally { setBusy(false); }
@@ -944,7 +992,7 @@ function render(d){
   const isOwner = d.role === 'owner';
   $('#roleBadge').textContent = isOwner ? '系統擁有者' : '管理員';
   $('#roleBadge').className = 'badge' + (isOwner ? ' owner' : '');
-  $('#syncBox').hidden = !isOwner;   // 跟試算表同步：只有系統擁有者看得到
+  $('#syncField').hidden = !isOwner;   // 跟試算表同步：只有系統擁有者看得到
   if ($('#adminPanel').classList.contains('show')) fillAdmins();
   const [y, m] = d.month.split('-');
   $('#monthLabel').textContent = y + ' 年 ' + Number(m) + ' 月';
@@ -1547,6 +1595,8 @@ function openSettings(){
   renderRoleLeave();
   updatePreview();
   $('#backdrop').classList.add('show'); $('#setPanel').classList.add('show');
+  const ms = openMonths();
+  loadOrderMonth(state.roster && ms.indexOf(state.roster.month) >= 0 ? state.roster.month : ms[0]);
 }
 function updatePreview(){
   const c = state.data.config;
