@@ -41,7 +41,7 @@
   .status{border-radius:12px;padding:10px 12px;font-size:14px;margin-bottom:10px}
   .status.open{background:var(--ok-bg);color:var(--ok)}
   .status.before,.status.unset{background:var(--other-bg);color:var(--other)}
-  .status.closed{background:var(--full-bg);color:var(--sub)}
+  .status.closed,.status.paused{background:var(--full-bg);color:var(--sub)}
 
   .counts{display:flex;gap:8px;margin-bottom:10px}
   .count{flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
@@ -71,6 +71,30 @@
   .day.mine-mgr{background:var(--mgr-bg);border-color:var(--mgr)} .day.mine-mgr .t{color:var(--mgr);font-weight:700}
   .day.holiday{background:#eaf3ec;border-color:#4f8a5b} .day.holiday .t{color:#4f8a5b;font-weight:700}
   .day.mine-other{background:var(--other-bg);border-color:var(--other)} .day.mine-other .t{color:var(--other);font-weight:700}
+  .day.mine-wish{background:#ffe27a;border:2px solid #e3b000} .day.mine-wish .n{color:#5c4300} .day.mine-wish .t{color:#7a5900;font-weight:700}
+  .day.mine-apply{background:#fff;border:2px dashed var(--other)} .day.mine-apply .t{color:var(--other);font-weight:700;font-size:11px}
+  .row.mine-wish{border:2px solid #e3b000} .row.mine-wish .b{background:#ffe27a;color:#7a5900}
+  .row.mine-apply{border:2px dashed var(--other)} .row.mine-apply .b{color:var(--other)}
+  .testbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;background:#ffe9e6;border:1.5px solid #c8553d;color:#8a2e1c;border-radius:12px;padding:8px 10px;margin-bottom:10px;font-size:13px}
+  .testbar select,.testbar button{font:inherit;font-size:13px;border:1px solid #c8553d;border-radius:8px;padding:4px 8px;background:#fff;color:#8a2e1c;max-width:100%}
+  .waitbox{text-align:center;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px 18px;margin:6px 0 14px}
+  .waitbox .ic{font-size:34px} .waitbox b{display:block;font-size:18px;margin:6px 0} .waitbox p{color:var(--sub);font-size:14px;margin:0 0 14px}
+  .turnbox{border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:14px;background:var(--mgr-bg);color:var(--mgr)}
+  .turnbox.go{background:var(--ok-bg);color:var(--ok);font-weight:700}
+  .turnbox.done{background:var(--full-bg);color:var(--sub)}
+  .turnbox ol{margin:6px 0 0;padding-left:22px;font-weight:400;color:var(--sub)}
+  .turnbox ol li.turn{color:var(--ok);font-weight:700} .turnbox ol li.me{text-decoration:underline}
+  .opts{display:flex;gap:6px;margin-top:8px}
+  .opts button{flex:1;border:1.5px solid var(--line);background:var(--card);border-radius:10px;padding:10px 4px;font:inherit;font-size:14px;font-weight:700;cursor:pointer;color:var(--ink)}
+  .opts button.wish{border-color:#e3b000;color:#7a5900;background:#fff6d1}
+  .opts button.kind{color:var(--other);border-color:var(--other)}
+  .opts button.off{background:var(--full-bg);color:var(--sub);border-color:var(--line)}
+  .submitbox{margin:14px 0 6px}
+  .submitbox .streak{background:var(--leave-bg);color:var(--leave);border-radius:10px;padding:8px 10px;font-size:13px;margin-bottom:8px}
+  #alertBox{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.35);z-index:60;padding:20px}
+  #alertBox.show{display:flex}
+  #alertBox .in{background:var(--card);border-radius:16px;padding:18px;max-width:420px;width:100%}
+  #alertBox h3{margin:0 0 8px;font-size:17px} #alertBox p{white-space:pre-line;margin:0 0 14px;font-size:15px;line-height:1.6}
   .day.sel{outline:2px solid var(--ink);outline-offset:1px}
   .blank{visibility:hidden}
 
@@ -131,6 +155,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--leave);border-radius:50%;animation:s 0.8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='S20261128u';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 
@@ -144,6 +169,7 @@
   </section>
 
   <section id="app" class="hidden">
+    <div class="testbar hidden" id="testBar"><b>🧪 測試模式</b><span id="tbWho"></span><select id="tbStaff"></select><button type="button" id="tbEnd">結束模擬</button></div>
     <header>
       <div>
         <div class="brand">小日子劃假系統</div>
@@ -157,15 +183,21 @@
     <div class="tabs hidden" id="monthTabs"></div>
 
     <div id="status" class="status"></div>
+    <div id="turnBox" class="turnbox hidden"></div>
+    <div id="waitBox" class="waitbox hidden"><div class="ic">🔒</div><b id="waitTitle"></b><p>開放後就可以進來劃假、許願和請假，請晚一點再回來看看。</p><button class="btn" id="waitReload">重新整理</button></div>
 
+    <div id="mainArea">
     <div class="counts">
       <div class="count"><small id="cLeaveLabel">自排</small><b id="cLeave">0</b><span id="cLeaveMax"></span></div>
+      <div class="count" id="cWishBox"><small>許願（主管決定）</small><b id="cWish">0</b><span id="cWishMax"></span><small id="cWishMgr" class="hidden" style="display:block;margin-top:4px;color:var(--mgr)"></small></div>
       <div class="count" id="cWeekendBox"><small>週六日自選</small><b id="cWeekend">0</b><span id="cWeekendMax"></span></div>
     </div>
 
     <div class="legend">
       <span><i style="background:var(--leave)"></i>我的排休</span>
       <span><i style="background:var(--mgr-bg);border:1px solid var(--mgr)"></i>公排</span>
+      <span><i style="background:#ffe27a;border:1px solid #e3b000"></i>許願</span>
+      <span><i style="background:#fff;border:1.5px dashed var(--other)"></i>請假待審</span>
       <span><i style="background:var(--ok-bg);border:1px solid var(--ok)"></i>還有名額</span>
       <span><i style="background:var(--full-bg)"></i>額滿／禁休</span>
       <span><i style="background:#eaf3ec;border:1px solid #4f8a5b"></i>公司公休</span>
@@ -180,6 +212,13 @@
 
     <div class="warns hidden" id="warns"><b>提醒</b><ul id="warnList"></ul></div>
 
+    <div class="submitbox hidden" id="submitBox">
+      <div class="streak hidden" id="streakBox"></div>
+      <button class="btn primary" id="submitBtn">送出</button>
+      <div class="hint" id="submitHint"></div>
+    </div>
+    </div>
+
     <footer id="foot"></footer>
   </section>
 </div>
@@ -191,8 +230,10 @@
   <div class="note hidden" id="sNote"></div>
   <ul class="people" id="sPeople"></ul>
   <button class="btn" id="sBtn"></button>
+  <div class="opts" id="sOpts"></div>
   <div class="hint" id="sHint"></div>
 </div>
+<div id="alertBox" role="alertdialog" aria-modal="true"><div class="in"><h3 id="alertTitle"></h3><p id="alertMsg"></p><button class="btn primary" id="alertOk">知道了</button></div></div>
 
 <div id="toast"></div>
 <div id="busy" class="hidden"><div class="spin"></div></div>
@@ -204,7 +245,7 @@ const CONFIG = {
   CLIENT_ID: '780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com'
 };
 const VERSION = '2.4.0';
-const POLL_MS = 30000;   // 自動更新間隔；資料沒變時後端只回「沒變」，很快
+const POLL_MS = 30000;    // 自動更新間隔；資料沒變時後端只回「沒變」，很快
 const WEEK = '日一二三四五六';
 
 const $ = s => document.querySelector(s);
@@ -264,12 +305,11 @@ async function start(){
 const NAV = [
   { id: 'leave',    label: '我的劃假', href: 'index.html',         show: me => me.staff },
   { id: 'roster',   label: '排休總表', href: 'admin.html#roster',   show: me => me.admin },
-  { id: 'dispatch', label: '派工',     href: 'dispatch.html',       show: me => me.admin },
   { id: 'quota',    label: '名額設定', href: 'admin.html#quota',    show: me => me.admin },
-  { id: 'rules',    label: '職務名額', href: 'admin.html#rules',    show: me => me.admin },
   { id: 'settings', label: '系統設定', href: 'admin.html#settings', show: me => me.admin },
   { id: 'admins',   label: '管理員',   href: 'admin.html#admins',   show: me => me.owner },
-  { id: 'dperm',    label: '派工權限', href: 'admin.html#dperm',    show: me => me.admin },
+  { id: 'dispatch', label: '派工',     href: 'dispatch.html',       show: me => me.admin },
+  { id: 'dperm',    label: '派工權限', href: 'admin.html#dperm', show: me => me.admin },
   { id: 'schedule', label: '班表',     href: 'dispatch.html',       show: me => !me.admin && !!me.dispatchRole }
 ];
 // 不是管理員的人，問派工系統有沒有開放看班表；有的話選單多一個「班表」
@@ -301,13 +341,36 @@ function showLogin(msg){
 function logout(msg){
   state.token = null; state.data = null; state.me = null;
   store.del('token');
+  try { sessionStorage.removeItem('fsActAs'); sessionStorage.removeItem('fsActPicked'); } catch(e){}
   if (window.google && google.accounts) google.accounts.id.disableAutoSelect();
   showLogin(msg);
 }
 
+/* ===== 測試模式：管理員模擬同仁 ===== */
+function renderTestBar(fs){
+  const bar = $('#testBar');
+  const show = fs.test && fs.admin && window.LeaveFS;
+  bar.classList.toggle('hidden', !show);
+  if (!show) return;
+  LeaveFS.maybePickActAs(fs);
+  $('#tbWho').textContent = fs.as ? '你（' + fs.real + '）正在模擬：' : '選一位同仁來模擬：';
+  const sel = $('#tbStaff');
+  if (!sel.dataset.filled){
+    sel.dataset.filled = '1';
+    sel.appendChild(el('option', '', fs.as ? '（換成其他人）' : '（我自己）')).value = '';
+    LeaveFS.staffList().sort((a, b) => (a.store + a.role + a.name).localeCompare(b.store + b.role + b.name, 'zh-Hant'))
+      .forEach(p => { const o = el('option', '', p.name + '・' + p.store + p.role); o.value = p.email; sel.appendChild(o); });
+    sel.onchange = () => { if (!sel.value) return; LeaveFS.actAs(sel.value); location.reload(); };
+  }
+  sel.value = fs.as || '';
+  $('#tbEnd').classList.toggle('hidden', !fs.as);
+  $('#tbEnd').onclick = () => { LeaveFS.actAs(''); location.href = 'admin.html#roster'; };
+}
+
 /* ===== API ===== */
 async function api(action, extra){
-  const body = JSON.stringify(Object.assign({ action, idToken: state.token }, extra || {}));
+  const act = window.LeaveFS ? LeaveFS.actingAs() : '';
+  const body = JSON.stringify(Object.assign({ action, idToken: state.token }, act ? { actAs: act } : {}, extra || {}));
   let data;
   try {
     const res = await fetch(CONFIG.API_URL, { method:'POST', body }); // text/plain，避免 CORS 預檢
@@ -315,6 +378,7 @@ async function api(action, extra){
   } catch(e){
     const err = new Error('連線失敗，請檢查網路後再試'); err.code = 'NETWORK'; throw err;
   }
+  if (data.fs){ if (window.LeaveFS) LeaveFS._set(data.fs); renderTestBar(data.fs); }
   if (!data.ok){ const err = new Error(data.error || '發生錯誤'); err.code = data.code; throw err; }
   return data;
 }
@@ -341,16 +405,17 @@ async function load(first, pre){
   finally { if (first) setBusy(false); }
 }
 
-async function act(action, date){
+async function act(action, date, type){
   if (state.busy) return;
   setBusy(true);
   try {
-    const data = await api(action, { date });
+    const data = await api(action, type ? { date, type } : { date });
     render(data);
     toast(data.message || '完成');
     closeSheet();
   } catch(e){
-    handleError(e);
+    if (e.code === 'WORK_STREAK') { closeSheet(); showAlert('這天不能排：會連續上班 7 天以上', e.message); }
+    else handleError(e);
     if (state.token && e.code !== 'AUTH') load(false); // 失敗就立刻更新名額
   } finally { setBusy(false); }
 }
@@ -387,13 +452,30 @@ function render(d){
   const st = $('#status');
   st.className = 'status ' + d.window.status;
   st.textContent = {
-    open:   '開放劃假中・' + d.window.closeAt + ' 截止',
+    open:   d.window.mode === '開放' ? '開放劃假中' : '開放劃假中・' + d.window.closeAt + ' 截止',
+    paused: '目前暫停劃假，請等管理員開放（可以先看名額）',
     before: '尚未開放・' + d.window.openAt + ' 開始劃假',
     closed: '劃假已截止（' + d.window.closeAt + '），要調整請找人換班並經主管同意',
     unset:  '主管還沒設定劃假時間'
   }[d.window.status];
 
-  $('#cLeaveLabel').textContent = Number(m) + ' 月自排' + (d.limits.maxMgr ? '（另有公排 ' + d.limits.maxMgr + ' 天由主管排）' : '');
+  $('#cLeaveLabel').textContent = Number(m) + ' 月自排';
+  $('#cWishBox').classList.toggle('hidden', !d.limits.maxMgr);
+  const mgrN = d.counts.mgr || 0;
+  $('#cWish').textContent = d.counts.wishPending || 0;
+  $('#cWishMax').textContent = ' / ' + Math.max(0, d.limits.maxMgr - mgrN) + ' 天';
+  $('#cWishMgr').textContent = mgrN ? '主管已排公排 ' + mgrN + ' 天' : '';
+  $('#cWishMgr').classList.toggle('hidden', !mgrN);
+  renderTurn(d);
+  // 還沒輪到：整個畫面先不給看，只說還沒對他開放
+  const waiting = !!(d.turn && d.turn.waiting);
+  $('#waitBox').classList.toggle('hidden', !waiting);
+  $('#mainArea').classList.toggle('hidden', waiting);
+  if (waiting){
+    $('#waitTitle').textContent = Number(m) + ' 月劃假還沒對你開放';
+    $('#status').classList.add('hidden');
+    if (state.sel) closeSheet();
+  } else $('#status').classList.remove('hidden');
   $('#cLeave').textContent = d.counts.leave;
   $('#cLeaveMax').textContent = ' / ' + d.limits.maxLeave + ' 天';
   $('#cWeekendBox').classList.toggle('hidden', !d.limits.weekendCapped);
@@ -423,6 +505,7 @@ function render(d){
   const ul = $('#warnList'); ul.textContent = '';
   warns.forEach(w => ul.appendChild(el('li', '', w)));
 
+  renderSubmit(d);
   $('#foot').textContent = '網頁 v' + VERSION + '・後端 v' + d.version + '・更新於 ' + d.serverTime.slice(11, 19);
 
   if (state.sel) fillSheet(state.sel);
@@ -456,6 +539,8 @@ function dayState(day){
   if (day.holiday) return { cls: 'holiday', text: '公休' };
   if (day.mine === '自排') return { cls: 'mine-leave', text: day.mineBy === 'admin' ? '自排(主管)' : '自排' };
   if (day.mine === '公排') return { cls: 'mine-mgr', text: '公排' };
+  if (day.mine === '許願') return { cls: 'mine-wish', text: '許願' };
+  if (day.mine && /申請$/.test(day.mine)) return { cls: 'mine-apply', text: day.mine.replace('申請', '待審') };
   if (day.mine) return { cls: 'mine-other', text: day.mine };
   if (day.unlimited) return { cls: 'open', text: '可排' };
   if (day.quota === null) return { cls: 'na', text: '—' };
@@ -505,33 +590,63 @@ function fillSheet(date){
     ul.appendChild(li);
   });
 
-  const btn = $('#sBtn'), hint = $('#sHint');
+  const btn = $('#sBtn'), hint = $('#sHint'), opts = $('#sOpts');
   const isWeekend = day.dow === 0 || day.dow === 6;
   btn.className = 'btn'; btn.disabled = false; hint.textContent = ''; btn.onclick = null;
+  opts.textContent = ''; btn.classList.remove('hidden');
+  const tv = d.turn || {};
+  const locked = tv.submitted ? '你這個月已經送出了，要修改請洽主管' : (tv.active && !tv.isMyTurn ? '還沒輪到你（目前輪到 ' + tv.turnName + '），事假／病假／特休可以先申請' : '');
+  const open = d.window.status === 'open';
+  const hasRoom = day.unlimited || (day.quota !== null && day.quota > 0 && day.used < day.quota);
+  // 下面一排：許願、事假、病假、特休
+  const addOpt = (label, cls, why, fn) => {
+    const o = el('button', cls + (why ? ' off' : ''), label);
+    o.onclick = () => { if (why){ hint.textContent = why; return; } fn(); };
+    opts.appendChild(o);
+  };
+  const showOpts = () => {
+    if (d.limits.maxMgr){
+      const why = !open ? '目前不能劃假' : locked || (!hasRoom ? '這天沒有名額' : (d.counts.wish >= d.limits.maxMgr ? ((d.counts.mgr || 0) ? '許願加公排已滿 ' + d.limits.maxMgr + ' 天' : '許願 ' + d.limits.maxMgr + ' 天已經滿了') : ''));
+      addOpt('許願', 'wish', why, () => act('book', date, '許願'));
+    }
+    (d.kinds || []).forEach(k => {
+      const why = !open ? '目前不能申請' : (!hasRoom ? '這天沒有名額' : '');
+      addOpt(k, 'kind', why, () => act('book', date, k));
+    });
+  };
 
   // 不能劃的時候按鈕還是可以按，按了就關掉面板回到月曆
   const disable = (label, why) => { btn.textContent = label; btn.className = 'btn off'; btn.onclick = closeSheet; hint.textContent = why || ''; };
 
   if (day.holiday) return disable('全公司公休', '這天大家統一放假（' + day.holiday + '），不用劃，也不佔自排');
   if (day.mine === '自排' && day.mineBy === 'admin') return disable('已排休', '這天是主管幫你排的，要調整請洽主管');
-  if (day.mine === '自排'){
+  const canCancelMine = day.mine === '自排' || (day.mine === '許願' && day.mineBy !== 'admin') || (/申請$/.test(day.mine || '') && day.mineBy !== 'admin');
+  if (canCancelMine && !/申請$/.test(day.mine) && locked) return disable('取消這天', locked);
+  if (canCancelMine){
+    const what = day.mine === '自排' ? '排休' : day.mine === '許願' ? '許願' : day.mine.replace('申請', '申請');
+    if (d.window.status === 'paused') return disable('取消這天', '目前暫停劃假，請等管理員開放');
     if (d.window.status !== 'open') return disable('取消這天', '不在劃假時間，要調整請找人換班並經主管同意');
     btn.className = 'btn danger' + (state.confirmCancel ? ' confirm' : '');
-    btn.textContent = state.confirmCancel ? '確定取消這天？' : '取消這天排休';
+    btn.textContent = state.confirmCancel ? '確定取消這天？' : '取消這天' + what;
+    if (/申請$/.test(day.mine)) hint.textContent = '等主管放行中，放行前可以自己取消';
+    if (day.mine === '許願') hint.textContent = '主管會依實際狀況決定給不給；決定前可以自己取消';
     btn.onclick = () => {
       if (!state.confirmCancel){ state.confirmCancel = true; fillSheet(date); return; }
       act('cancel', date);
     };
     return;
   }
-  if (day.mine) return disable('已排' + day.mine, '這天是主管排的' + day.mine + '，要調整請洽主管');
+  if (day.mine) return disable('已排' + day.mine, day.mine === '公排' ? '這天是公排（主管核准或安排的），要調整請洽主管' : '這天主管已經放行，要調整請洽主管');
+  if (d.window.status === 'paused') return disable('劃這天排休', '目前暫停劃假，請等管理員開放');
   if (d.window.status !== 'open') return disable('劃這天排休', '目前不在劃假時間');
   if (!day.unlimited){
     if (day.quota === null) return disable('劃這天排休', '請洽主管設定名額');
     if (day.quota <= 0) return disable('這天禁休', day.note);
     if (day.used >= day.quota) return disable('名額已滿', '可以跟已排休的同事協調看看');
   }
-  if (d.counts.leave >= d.limits.maxLeave) return disable('劃這天排休', '自排 ' + d.limits.maxLeave + ' 天已經劃滿');
+  showOpts();
+  if (locked) return disable('劃這天排休', locked);
+  if (d.counts.leave >= d.limits.maxLeave) return disable('劃這天排休', '自排 ' + d.limits.maxLeave + ' 天已經劃滿' + (d.limits.maxMgr ? '，可以按下面「許願」' : ''));
   if (isWeekend && d.limits.weekendCapped && d.counts.weekend >= d.limits.maxWeekend)
     return disable('劃這天排休', '週六日自選 ' + d.limits.maxWeekend + ' 天已經選滿');
 
@@ -540,6 +655,66 @@ function fillSheet(date){
   hint.textContent = day.unlimited ? '這個職務每天不限人數' : '剩 ' + (day.quota - day.used) + ' 個名額';
   btn.onclick = () => act('book', date);
 }
+
+/* ===== 劃假順序 ===== */
+function renderTurn(d){
+  const box = $('#turnBox'), tv = d.turn || {};
+  box.textContent = '';
+  if ((!tv.active && !tv.submitted) || tv.waiting){ box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  if (tv.submitted){ box.className = 'turnbox done'; box.textContent = '你 ' + Number(d.month.slice(5)) + ' 月的排休已經送出' + (tv.submittedAt ? '（' + tv.submittedAt + '）' : '') + '，要修改請洽主管'; return; }
+  if (tv.freeNow){ box.className = 'turnbox go'; box.textContent = '指定順序的同仁都送出了，現在開放大家自由劃假，先劃先贏！排好後記得按最下面的「送出」'; }
+  else if (tv.isMyTurn){ box.className = 'turnbox go'; box.textContent = '輪到你劃假了！自排、許願排好後，按最下面的「送出」換下一位'; }
+  else if (!tv.myIndex){ box.className = 'turnbox'; box.textContent = '目前輪到 ' + tv.turnName + ' 劃假（' + (tv.scope || '') + '有 ' + tv.total + ' 位指定順序）。他們都送出後，就開放大家自由劃，先劃先贏；事假／病假／特休隨時可以申請'; }
+  else { box.className = 'turnbox'; box.textContent = '目前輪到 ' + tv.turnName + ' 劃假，你在' + (tv.scope ? '「' + tv.scope + '」' : '') + '排第 ' + tv.myIndex + ' 位（共 ' + tv.total + ' 位）。輪到你之前可以先看名額；事假／病假／特休隨時可以申請' + (tv.free ? '。之後其他人自由劃' : ''); }
+  const ol = el('ol');
+  (tv.list || []).forEach(p => ol.appendChild(el('li', (p.turn ? 'turn' : '') + (p.me ? ' me' : ''), p.name + (p.submitted ? '　✓ 已送出' : p.turn ? '　← 劃假中' : ''))));
+  box.appendChild(ol);
+}
+
+/* ===== 送出 ===== */
+function renderSubmit(d){
+  const box = $('#submitBox'), tv = d.turn || {};
+  const show = d.window.status === 'open' && !tv.submitted;
+  box.classList.toggle('hidden', !show);
+  if (!show) return;
+  const needL = Math.max(0, d.limits.maxLeave - d.counts.leave), needW = Math.max(0, d.limits.maxMgr - (d.counts.wish || 0));
+  const streaks = d.streaks || [];
+  $('#streakBox').classList.toggle('hidden', !streaks.length);
+  $('#streakBox').textContent = streaks.length ? '會連續上班 7 天以上：' + streaks.join('、') : '';
+  const btn = $('#submitBtn'), hint = $('#submitHint');
+  const notTurn = tv.active && !tv.isMyTurn;
+  const ready = !needL && !needW && !notTurn;
+  btn.className = 'btn ' + (ready ? 'primary' : 'off');
+  btn.textContent = '送出 ' + Number(d.month.slice(5)) + ' 月排休';
+  hint.textContent = notTurn ? '還沒輪到你' : (needL || needW) ? '還差' + [needL ? ' 自排 ' + needL + ' 天' : '', needW ? ' 許願 ' + needW + ' 天' : ''].join('') + '，排滿才能送出'
+    : '送出後就不能再改' + (tv.active ? '，會換下一位劃假' : '');
+}
+function showAlert(title, msg){
+  $('#alertTitle').textContent = title; $('#alertMsg').textContent = msg;
+  $('#alertBox').classList.add('show');
+}
+$('#alertOk').addEventListener('click', () => $('#alertBox').classList.remove('show'));
+$('#waitReload').addEventListener('click', () => { if (!state.busy) load(false); });
+$('#submitBtn').addEventListener('click', async () => {
+  const d = state.data; if (!d || state.busy) return;
+  const tv = d.turn || {};
+  const needL = d.limits.maxLeave - d.counts.leave, needW = d.limits.maxMgr - (d.counts.wish || 0);
+  if (tv.active && !tv.isMyTurn) return showAlert('還沒輪到你', '目前輪到 ' + tv.turnName + ' 劃假');
+  if (needL > 0 || needW > 0) return showAlert('還沒排完', '還差' + [needL > 0 ? ' 自排 ' + needL + ' 天' : '', needW > 0 ? ' 許願 ' + needW + ' 天' : ''].join('') + '。排不滿的話請洽主管');
+  if (!state.confirmSubmit){ state.confirmSubmit = true; $('#submitBtn').textContent = '確定送出？送出後就不能再改'; setTimeout(() => { state.confirmSubmit = false; if (state.data) renderSubmit(state.data); }, 4000); return; }
+  state.confirmSubmit = false;
+  setBusy(true);
+  try {
+    const data = await api('submit', { month: d.month });
+    render(data); toast(data.message || '已送出');
+  } catch(e){
+    if (e.code === 'WORK_STREAK7') showAlert('不能送出：會連上 7 天', e.message);
+    else if (e.code === 'NOT_DONE') showAlert('還沒排完', e.message);
+    else handleError(e);
+    if (state.token && e.code !== 'AUTH') load(false);
+  } finally { setBusy(false); }
+});
 
 /* ===== 小工具 ===== */
 function el(tag, cls, text){
@@ -568,6 +743,65 @@ document.querySelectorAll('#viewSw button').forEach(b => b.addEventListener('cli
 }));
 $('#onlyMine').addEventListener('change', () => { if (state.data) renderList(state.data); });
 </script>
+<script>
+/* 試算表版：測試模式（系統擁有者切換；管理員可以模擬同仁），資料由 Apps Script 回傳 */
+window.FS_ALLOW_ACT_AS = true;
+(function(){
+  const AS_KEY = 'fsActAs', PICKED_KEY = 'fsActPicked';
+  let cur = null;
+  function showPicker(fs) {
+    const list = window.LeaveFS.staffList().sort((x, y) => (x.store + x.role + x.name).localeCompare(y.store + y.role + y.name, 'zh-Hant'));
+    const wrap = document.createElement('div');
+    wrap.id = 'fsPick';
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(40,30,25,.55);display:flex;align-items:flex-end;justify-content:center';
+    wrap.innerHTML = '<div style="background:#fffaf5;width:min(480px,100%);max-height:88vh;display:flex;flex-direction:column;border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));font-size:15px;color:#3a2e28;box-shadow:0 -6px 30px rgba(0,0,0,.2)">' +
+      '<div style="font-weight:700;font-size:17px">🧪 測試模式：要用誰的身分進入？</div>' +
+      '<div style="font-size:13px;color:#8a7b70;margin:4px 0 10px">選一位同仁，就會看到他的劃假畫面；劃假、許願、送出都會真的寫入。</div>' +
+      '<button type="button" data-self="1" style="font:inherit;border:1.5px solid #3a2e28;background:#3a2e28;color:#fff;border-radius:12px;padding:11px;margin-bottom:10px;cursor:pointer">用我自己的身分（' + (fs.real || '') + '）進入</button>' +
+      '<input type="search" placeholder="搜尋姓名、門市、職務" style="font:inherit;border:1px solid #e4d8cc;border-radius:10px;padding:9px 11px;margin-bottom:8px">' +
+      '<div class="lst" style="overflow:auto;display:grid;gap:6px;padding-bottom:4px"></div></div>';
+    document.body.appendChild(wrap);
+    const box = wrap.querySelector('.lst'), q = wrap.querySelector('input');
+    const draw = () => {
+      const k = q.value.trim();
+      box.innerHTML = '';
+      list.filter(p => !k || (p.name + p.store + p.role + p.email).indexOf(k) >= 0).forEach(p => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.style.cssText = 'font:inherit;text-align:left;border:1px solid #e4d8cc;background:#fff;border-radius:10px;padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;gap:8px';
+        b.innerHTML = '<b></b><span style="color:#8a7b70;font-size:13px"></span>';
+        b.querySelector('b').textContent = p.name;
+        b.querySelector('span').textContent = p.store + '・' + p.role;
+        b.onclick = () => { window.LeaveFS.actAs(p.email); location.href = 'index.html'; };
+        box.appendChild(b);
+      });
+      if (!box.children.length) box.innerHTML = '<div style="color:#8a7b70;font-size:13px;padding:8px">找不到符合的同仁</div>';
+    };
+    q.oninput = draw; draw();
+    wrap.querySelector('[data-self]').onclick = () => {
+      try { sessionStorage.setItem(PICKED_KEY, '1'); sessionStorage.removeItem(AS_KEY); } catch (e) {}
+      wrap.remove();
+      if (window.FS_ALLOW_ACT_AS && fs.as) location.reload();
+    };
+  }
+
+  window.LeaveFS = {
+    sheets: true,
+    _set(fs){ cur = fs; },
+    staffList(){ return ((cur && cur.staff) || []).map(p => Object.assign({}, p)); },
+    actAs(email){ try { if (email) sessionStorage.setItem(AS_KEY, email); else sessionStorage.removeItem(AS_KEY); sessionStorage.setItem(PICKED_KEY, '1'); } catch (e) {} },
+    actingAs(){ try { return sessionStorage.getItem(AS_KEY) || ''; } catch (e) { return ''; } },
+    maybePickActAs(fs){
+      let picked = '';
+      try { picked = sessionStorage.getItem(PICKED_KEY) || ''; } catch (e) {}
+      if (!fs || !fs.test || !fs.admin || fs.as || picked || document.getElementById('fsPick')) return;
+      cur = fs; showPicker(fs);
+    },
+    pickActAs(fs){ cur = fs || cur; showPicker(fs || cur || {}); }
+  };
+})();
+</script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoad()"></script>
+
 </body>
 </html>

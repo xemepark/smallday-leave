@@ -9,7 +9,7 @@
  *           所以只能劃自己的假，不能代填。
  */
 
-const VERSION = '2.8.0';
+const VERSION = '2.9.0';
 const TZ = 'Asia/Taipei';
 const SH = {
   SETTINGS: '設定',
@@ -55,7 +55,7 @@ function doGet() {
 
 /* 只讀的動作可以用快取；其他會寫入的動作一律讀最新資料，做完把快取版本往前推 */
 const READ_ACTIONS = ['whoami', 'load', 'adminLoad', 'adminRoster'];
-const WRITE_ACTIONS = ['book', 'cancel', 'submit', 'fsSync', 'adminSet', 'adminSaveSettings', 'adminSetMode', 'adminSetOrder', 'adminSubmitFor', 'adminSetAdmins', 'adminSetLeave', 'adminSetDay', 'adminSaveRules'];
+const WRITE_ACTIONS = ['book', 'cancel', 'submit', 'fsSync', 'fsSetTestMode', 'adminSet', 'adminSaveSettings', 'adminSetMode', 'adminSetOrder', 'adminSubmitFor', 'adminSetAdmins', 'adminSetLeave', 'adminSetDay', 'adminSaveRules'];
 
 function doPost(e) {
   for (const k in MEMO_) delete MEMO_[k];
@@ -88,6 +88,16 @@ function doPostInner_(e) {
     return json_({ ok: false, error: '請求格式錯誤', code: 'BAD_REQUEST' });
   }
   try {
+    // 測試模式（試算表版）：管理員可以用某位同仁的身分操作同仁畫面
+    FS_INFO_ = null; ACT_BY_ = '';
+    const act = testModeInfo_(req);
+    if (req.action === 'fsSetTestMode') return json_(setTestMode_(req.idToken, !!req.on));
+    if (act.as && String(req.action || '').indexOf('admin') < 0) {
+      ACT_BY_ = act.real;
+      const asStaff = getStaff_().find(p => p.email === act.as);
+      if (req.action === 'whoami') return json_({ ok: true, version: VERSION, email: asStaff.email, name: asStaff.name, staff: true, admin: false, owner: false });
+      return json_(staffAction_(asStaff, req));
+    }
     if (req.action === 'whoami') return json_(whoami_(req.idToken));
     if (req.action === 'fsSync') return json_(fsSyncByAdmin_(req.fbToken, req.op));
     if (String(req.action || '').indexOf('admin') === 0) {
@@ -121,28 +131,78 @@ function doPostInner_(e) {
           return json_({ ok: false, error: '未知的動作', code: 'BAD_REQUEST' });
       }
     }
-    const me = verifyUser_(req.idToken);
-    switch (req.action) {
-      case 'load': {
-        // 自動更新：資料沒變就不用重算，直接回「沒變」
-        const ver = dataVer_();
-        if (req.since && req.since === ver) return json_({ ok: true, same: true, ver: ver });
-        const view = buildView_(me, readContext_(), req.month);
-        view.ver = ver;
-        return json_(view);
-      }
-      case 'book':
-        return json_(book_(me, String(req.date || ''), req.type));
-      case 'submit':
-        return json_(submit_(me, String(req.month || '')));
-      case 'cancel':
-        return json_(cancel_(me, String(req.date || '')));
-      default:
-        return json_({ ok: false, error: '未知的動作', code: 'BAD_REQUEST' });
-    }
+    return json_(staffAction_(verifyUser_(req.idToken), req));
   } catch (err) {
     return json_({ ok: false, error: err.message || String(err), code: err.code || 'ERROR' });
   }
+}
+
+/** 同仁的動作（本人，或測試模式中被模擬的同仁） */
+function staffAction_(me, req) {
+  switch (req.action) {
+    case 'load': {
+      // 自動更新：資料沒變就不用重算，直接回「沒變」
+      const ver = dataVer_();
+      if (req.since && req.since === ver) return { ok: true, same: true, ver: ver };
+      const view = buildView_(me, readContext_(), req.month);
+      view.ver = ver;
+      return view;
+    }
+    case 'book':
+      return book_(me, String(req.date || ''), req.type);
+    case 'submit':
+      return submit_(me, String(req.month || ''));
+    case 'cancel':
+      return cancel_(me, String(req.date || ''));
+    default:
+      return { ok: false, error: '未知的動作', code: 'BAD_REQUEST' };
+  }
+}
+
+/* ---------- 測試模式（試算表版）---------- */
+let FS_INFO_ = null, ACT_BY_ = '';
+/** 回應裡附上測試模式狀態；測試模式中，管理員送 actAs 就用那位同仁的身分 */
+function testModeInfo_(req) {
+  let real = '';
+  try { real = req.idToken ? verifyEmail_(req.idToken) : ''; } catch (e) { return { as: '' }; }
+  if (!real) return { as: '' };
+  const s = getSettings_();
+  const owner = !!s.owner && real === s.owner;
+  const admin = owner || s.admins.indexOf(real) >= 0;
+  let as = '';
+  const staff = s.testMode && admin ? getStaff_() : [];
+  if (s.testMode && admin && req.actAs) {
+    const want = normEmail_(req.actAs);
+    if (staff.some(p => p.email === want)) as = want;
+  }
+  FS_INFO_ = { test: !!s.testMode, admin: admin, owner: owner, real: real, as: as };
+  if (s.testMode && admin) FS_INFO_.staff = staff.filter(p => p.email).map(p => ({ email: p.email, name: p.name, role: p.role, store: p.store }));
+  return { real: real, as: as };
+}
+function setTestMode_(token, on) {
+  const real = verifyEmail_(token);
+  const s = getSettings_();
+  if (!s.owner || real !== s.owner) fail_('只有系統擁有者可以切換測試／上線模式', 'NOT_OWNER');
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) fail_('系統忙碌中，請過幾秒再試', 'BUSY');
+  try {
+    const sh = sheet_(SH.SETTINGS);
+    const values = sh.getDataRange().getValues();
+    let row = -1;
+    for (let i = 1; i < values.length; i++) if (String(values[i][0]).trim() === '測試模式') { row = i + 1; break; }
+    if (row > 0) sh.getRange(row, 2).setValue(on ? '是' : '否');
+    else sh.appendRow(['測試模式', on ? '是' : '否', '是＝管理員可以模擬同仁測試；正式上線請改成「否」']);
+    log_({ email: real, name: '系統擁有者' }, on ? '切換成測試模式' : '切換成上線模式', '');
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+  if (FS_INFO_) {
+    FS_INFO_.test = on;
+    if (on) FS_INFO_.staff = getStaff_().filter(p => p.email).map(p => ({ email: p.email, name: p.name, role: p.role, store: p.store }));
+    else delete FS_INFO_.staff;
+  }
+  return { ok: true, message: on ? '已切換成測試模式：管理員可以模擬同仁' : '已切換成上線模式' };
 }
 
 /* ============================== 劃假／取消 ============================== */
@@ -1354,6 +1414,7 @@ function readSettings_() {
     openAt: toTime_(m['開放時間']),
     closeAt: toTime_(m['截止時間']),
     mode: normMode_(m['劃假狀態']),
+    testMode: ['是', 'true', 'TRUE', '測試', '1'].indexOf(String(m['測試模式'] == null ? '' : m['測試模式']).trim()) >= 0,
     monthOff: num_(m['每月休假天數'], 8),
     maxLeave: num_(m['每月休假天數'], 8),
     roleLeave: parseRoleLeave_(m['職務自排公排']),
@@ -2184,11 +2245,12 @@ function cacheGetBig_(key) {
 
 function log_(me, action, date) {
   const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SH.LOG);
-  if (sh) sh.appendRow([nowStr_(), me.email, me.name, action, date]);
+  if (sh) sh.appendRow([nowStr_(), me.email, me.name, action, (ACT_BY_ ? '［測試模式：' + ACT_BY_ + ' 模擬］' : '') + date]);
 }
 
 function json_(o) {
   if (o && TIMES_.length) { T_('end'); o._t = TIMES_.join(' '); }
+  if (o && typeof o === 'object' && FS_INFO_ && !o.fs) o.fs = FS_INFO_;
   return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
 }
 

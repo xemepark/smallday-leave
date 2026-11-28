@@ -42,6 +42,29 @@
   .lv-公排{background:#e6effa;color:#4a7fb5;border:1px solid #4a7fb5}
   .lv-特休{background:var(--ov-bg);color:var(--ov);border:1px solid var(--ov)}
   .lv-other{background:var(--full-bg);color:var(--ink)}
+  .lv-許願{background:#ffe27a;color:#7a5900;border:1px solid #e3b000}
+  .lv-apply{background:#fff;color:var(--ov);border:1.5px dashed var(--ov)}
+  .lv-kind{background:var(--ov-bg);color:var(--ov);border:1px solid var(--ov)}
+  .card2{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:12px}
+  .rrow .rg{display:inline-flex;align-items:center;gap:4px;margin-right:10px} .rrow .rg small{color:var(--sub)}
+  .rulesum .rs{display:flex;gap:8px;font-size:14px;padding:4px 0;border-top:1px dashed var(--line)} .rulesum .rs b{min-width:56px} .rulesum .rs span{color:var(--sub)}
+  .rsbtn{margin-top:8px;font:inherit;font-size:14px;border:1px solid var(--accent);color:var(--accent);background:var(--card);border-radius:10px;padding:7px 12px;cursor:pointer}
+  .steph{margin:4px 0 8px;font-size:15px} .steph small{color:var(--sub);font-weight:400;margin-left:6px;font-size:13px}
+  .card2 h3{margin:0 0 6px;font-size:15px} .card2 h3 small{color:var(--sub);font-weight:400;margin-left:6px}
+  .card2 summary{cursor:pointer;font-weight:700;font-size:15px}
+  .rv{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px dashed var(--line);font-size:14px;flex-wrap:wrap}
+  .rv:first-of-type{border-top:0}
+  .rv .who{flex:1;min-width:140px} .rv .who small{color:var(--sub);margin-left:6px}
+  .rv button,.ordbar button,.ol button{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:5px 10px;font:inherit;font-size:13px;cursor:pointer}
+  .rv button.yes{background:var(--ok);color:#fff;border-color:var(--ok)} .rv button.no{color:var(--accent);border-color:var(--accent)}
+  .ordbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0}
+  .ordbar select{font:inherit;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--card)}
+  .ordbar button.save{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  .ol{list-style:none;margin:0;padding:0}
+  .ol li{display:flex;align-items:center;gap:6px;padding:6px 0;border-top:1px dashed var(--line);font-size:14px}
+  .ol li .no{width:22px;color:var(--sub);text-align:right} .ol li .nm{flex:1} .ol li .st{font-size:12px;color:var(--sub)}
+  .ol li.turn .nm{color:var(--ok);font-weight:700} .ol li.sub .nm{color:var(--sub)}
+  .ol li.freehd{color:#9a5b00;background:#fff6d1;border-radius:8px;padding:6px 8px;font-size:13px;font-weight:700;border-top:none;margin-top:6px} .ol li.free .nm{color:var(--sub)}
   .lv{position:relative}
   .lv.adm::after{content:'';position:absolute;top:-4px;right:-4px;width:8px;height:8px;border-radius:50%;background:#7b5ea7;border:1.5px solid #fff}
   .bytag{font-size:11px;color:#7b5ea7;margin-left:4px}
@@ -85,7 +108,33 @@
   .chips{display:flex;gap:6px;flex-wrap:wrap}
   .chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 14px;cursor:pointer;font:inherit;color:var(--ink)}
   .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
-  .tag{font-size:12px;color:var(--sub)}
+  .tag{font-size:12px;color:var(--sub)} .tag.warn{color:#9a5b00;background:#fff6d1;border-radius:8px;padding:6px 8px;margin:4px 0}
+  .timebox{margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg)} .timebox > label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
+  #syncField{display:none!important}
+  .secthd{margin:18px 0 4px;padding-top:14px;border-top:2px dashed var(--line);font-size:13px;font-weight:700;color:var(--accent)}
+  .ordmonths{display:flex;gap:6px;margin:6px 0} .ordmonths button{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:999px;padding:4px 12px;background:var(--card)} .ordmonths button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .testadm{background:#fff3f0;border:1.5px solid #c8553d;border-radius:14px;padding:10px 12px;margin-bottom:12px;display:grid;gap:8px;font-size:14px}
+  .testadm .trow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px} .testadm small{color:var(--sub);font-size:12px;flex-basis:100%}
+  .testadm select,.testadm button{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:5px 10px;background:var(--card);max-width:100%}
+  .testadm .seg2 button.on{background:#c8553d;color:#fff;border-color:#c8553d}
+  .modebar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:12px}
+  .mstate{display:flex;align-items:center;gap:8px;font-size:14px}
+  .mstate i{width:10px;height:10px;border-radius:50%;background:var(--sub);flex:none}
+  .mstate.open i{background:var(--ok)} .mstate.paused i,.mstate.closed i{background:var(--accent)} .mstate.before i,.mstate.unset i{background:var(--ov)}
+  .mstate small{display:block;color:var(--sub);font-size:12px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;flex:none}
+  .seg button{border:0;background:var(--card);font:inherit;font-size:13px;padding:7px 12px;cursor:pointer;color:var(--ink)}
+  .seg button+button{border-left:1px solid var(--line)}
+  .seg button.on{background:var(--ink);color:#fff}
+  .seg button.ask{background:var(--accent);color:#fff}
+  .seg3{display:flex;width:100%}
+  .seg3 button{flex:1;padding:10px 6px;font-size:14px}
+  .syncbox{flex-basis:100%;border-top:1px dashed var(--line);padding-top:8px;font-size:13px}
+  .syncbox summary{cursor:pointer;color:var(--sub)}
+  .syncrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .syncrow button{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px 10px;font:inherit;font-size:13px;cursor:pointer;color:var(--ink);text-align:left;flex:1 1 200px}
+  .syncrow button small{display:block;color:var(--sub);font-size:11px}
+  .syncrow button.ask{border-color:var(--accent);background:var(--accent-bg)}
   .tag b{color:var(--accent)}
 
   .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--sub);margin:4px 0 8px}
@@ -232,6 +281,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s .8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='S20261128u';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 <div class="wrap">
@@ -250,6 +300,12 @@
     </header>
 
     <nav class="menu" id="menu"></nav>
+    <div class="modebar hidden" id="modeBar">
+      <div class="mstate" id="modeState"><i></i><div><b id="modeTitle"></b><small id="modeSub"></small></div></div>
+      <div class="seg"><button type="button" id="modeEdit">到系統設定切換</button></div>
+
+    </div>
+
 
     <div class="bar">
       <div class="month"><button id="prev" aria-label="上個月">‹</button><b id="monthLabel"></b><button id="next" aria-label="下個月">›</button></div>
@@ -257,25 +313,34 @@
       <span class="tag" id="bookingTag"></span>
     </div>
 
-    <div class="legend" id="quotaLegend">
-      <span><i style="background:var(--ov-bg);border-color:var(--ov)"></i>特別設定（日期覆寫）</span>
-      <span><i style="background:var(--full-bg)"></i>0 = 禁休</span>
-      <span><i style="background:#eaf3ec;border-color:#4f8a5b"></i>休 = 全公司公休</span>
-      <span>不限 = 不受名額控制的職務</span>
-      <span>數字＝可休人數，下面小字＝已排人數</span>
-    </div>
 
     <div id="quotaView">
+      <div class="card2 rulesum" id="ruleSum">
+        <h3>① 預設規則<small>平常每天各職務可以休幾人，每個月都照這個走</small></h3>
+        <div id="ruleSumBody"></div>
+        <button type="button" class="rsbtn" id="ruleEdit">✏️ 編輯預設規則</button>
+      </div>
+      <h3 class="steph">② 單日微調<small>某一天要跟預設不一樣（檔期、活動、過年），點那一格或那天的日期改</small></h3>
+      <div class="legend" id="quotaLegend">
+        <span><i style="background:var(--ov-bg);border-color:var(--ov)"></i>特別設定（日期覆寫）</span>
+        <span><i style="background:var(--full-bg)"></i>0 = 禁休</span>
+        <span><i style="background:#eaf3ec;border-color:#4f8a5b"></i>休 = 全公司公休</span>
+        <span>不限 = 不受名額控制的職務</span>
+        <span>數字＝可休人數，下面小字＝已排人數</span>
+      </div>
       <div class="tablewrap"><table id="grid"></table></div>
-      <div class="hint">點任一格就能改那天、那個職位的名額。<b>點上面的日期</b>可以把那天設成「全公司禁休」或「全公司公休」（例如過年）。沒有特別設定的格子，用的是「名額規則」的預設值。</div>
+      <div class="hint">點任一格就能改那天、那個職位的名額。<b>點上面的日期</b>可以把那天設成「全公司禁休」或「全公司公休」（例如過年）。沒有特別設定的格子，用的是上面「① 預設規則」。</div>
     </div>
     <div id="rosterView" class="hidden">
       <div class="legend">
         <span><span class="lv lv-自排">自</span> 自排（同仁自己挑，天數依職務設定）</span>
         <span><span class="lv lv-公排">排</span> 公排（公司排，不算進自排天數）</span>
+        <span><span class="lv lv-許願">願</span> 許願（待你決定）</span>
+        <span><span class="lv lv-apply">待</span> 事假／病假／特休申請（待放行）</span>
         <span><span class="lv lv-特休">特</span> 特休</span>
         <span><span class="lv lv-公休">休</span> 全公司公休</span>
       </div>
+      <div class="card2 hidden" id="reviewBox"></div>
       <div class="rtools">
         <button id="byDateBtn">📅 依日期列出：每天誰休</button>
         <span class="tag" style="align-self:center">點同仁名字＝看他這個月的排休</span>
@@ -303,8 +368,8 @@
   <div class="field">
     <label>套用範圍</label>
     <div class="radio">
-      <label><input type="radio" name="scope" value="store" checked><span><b id="scopeStoreLabel"></b><small>只改這間門市，名額由這間店自己算</small></span></label>
-      <label><input type="radio" name="scope" value="all"><span><b>所有門市</b><small>每間店都改成這個數字；原本是合計的，就改合計人數</small></span></label>
+      <label><input type="radio" name="scope" value="store" checked><span><b id="scopeStoreLabel"></b><small>只改這一區（北部＝台北、中壢、楊梅、竹北合算）</small></span></label>
+      <label><input type="radio" name="scope" value="all"><span><b>北部和台中都改</b><small>兩區各自都改成這個數字</small></span></label>
     </div>
   </div>
 
@@ -327,6 +392,15 @@
   <h2>系統設定</h2>
   <div class="meta">改完按儲存，員工畫面最多 15 秒就會更新</div>
 
+  <div class="field" id="testField">
+    <label>測試模式（切換後立即生效，不用按儲存）</label>
+    <div class="testadm" id="testAdm">
+      <div class="trow" id="tOwnerRow"><b>系統模式</b><div class="seg2"><button type="button" data-t="0">上線模式</button><button type="button" data-t="1">測試模式</button></div><small id="tModeNote"></small></div>
+      <div class="trow hidden" id="tActRow"><b>🧪 模擬同仁</b><select id="tStaff"></select><button type="button" id="tGo">用他的身分開啟同仁畫面</button><small>會看到那位同仁的完整畫面，劃假、許願、送出都會真的寫入（紀錄會標示是測試模擬）</small></div>
+    </div>
+
+  </div>
+
   <div class="field">
     <label>開放劃假的月份</label>
     <div class="grid2">
@@ -337,10 +411,18 @@
   <div class="preview" id="sPreview"></div>
 
   <div class="field">
-    <label>劃假開放時間</label>
-    <div class="grid2">
-      <div><input class="text" type="datetime-local" id="sOpen"><div class="subnote">開始</div></div>
-      <div><input class="text" type="datetime-local" id="sClose"><div class="subnote">截止</div></div>
+    <label>劃假狀態</label>
+    <div class="mstate" id="sModeNow"><i></i><div><b></b><small></small></div></div>
+    <div class="seg seg3" id="sMode" style="margin-top:8px">
+      <button type="button" data-m="自動">依預約時間</button><button type="button" data-m="開放">手動開放</button><button type="button" data-m="暫停">手動暫停</button>
+    </div>
+    <div class="subnote" id="sModeNote"></div>
+    <div class="timebox hidden" id="sTimeField">
+      <label>預約時間</label>
+      <div class="grid2">
+        <div><input class="text" type="datetime-local" id="sOpen"><div class="subnote">自動開放</div></div>
+        <div><input class="text" type="datetime-local" id="sClose"><div class="subnote">自動結束</div></div>
+      </div>
     </div>
   </div>
 
@@ -357,6 +439,27 @@
   <div class="field">
     <label>各職務自排／公排天數（沒勾的職務＝每月休假天數全部都可以自排）</label>
     <div id="sRoles"></div>
+  </div>
+
+  <div class="secthd">以下功能按了就立即生效，不用按「儲存」</div>
+
+  <div class="field">
+    <label>劃假順序與送出狀況</label>
+    <div class="subnote">順序會同時套用到所有開放劃假的月份，還沒輪到的人哪個月份都不能劃；送出狀況每個月分開看。</div>
+    <div class="ordmonths" id="orderMonths"></div>
+    <div id="orderIn"></div>
+  </div>
+
+  <div class="field" id="syncField">
+    <label>跟 Google 試算表同步（只有系統擁有者看得到）</label>
+      <details class="syncbox" id="syncBox" open>
+        <summary>跟 Google 試算表同步</summary>
+        <div class="syncrow">
+          <button type="button" data-op="pull"><b>Firestore → 試算表</b><small>把最新的劃假紀錄、設定寫回試算表（每天凌晨 3 點也會自動做）</small></button>
+          <button type="button" data-op="push"><b>試算表 → Firestore（只有設定）</b><small>名額、公休、系統設定、人員；劃假紀錄不動。開放中也可以用</small></button>
+          <button type="button" data-op="pushAll"><b>試算表 → Firestore（含劃假紀錄）</b><small>以試算表為準覆蓋劃假紀錄，要先「手動暫停」</small></button>
+        </div>
+      </details>
   </div>
 
   <div class="btns">
@@ -446,8 +549,8 @@
 </div>
 
 <div id="rulesPanel" class="modal" role="dialog" aria-modal="true">
-  <h2>職務與每日名額</h2>
-  <div class="meta">勾選的職務每天休假有人數限制；沒勾的職務每天不限人數（每人每月自排、週末、連休上限照算）。特定日期要例外，到「名額設定」點那一格改。<br><a href="#quota" style="color:var(--accent);font-weight:700">👉 設定某一天某職務只能休幾人（去名額設定）</a></div>
+  <h2>預設規則：各職務每天可休幾人</h2>
+  <div class="meta">勾選的職務每天休假有人數限制；沒勾的職務每天不限人數（每人每月自排、週末、連休上限照算）。<b>北部</b>＝台北、中壢、楊梅、竹北合算一份名額，<b>台中</b>自己一份。某一天要例外，儲存後在名額設定的表格點那一格改。</div>
   <div id="rList"></div>
   <div class="btns" style="margin-top:12px">
     <button class="btn ghost" id="rCancel">取消</button>
@@ -506,13 +609,13 @@ async function applyHash(){
   if (h === 'admins' && !state.me.owner) h = 'quota';
   closePanel(true);
   // 系統設定、管理員是彈出面板，背後維持目前的畫面
-  const v = h === 'roster' ? 'roster' : h === 'quota' ? 'quota' : (state.data || state.roster ? state.view : 'quota');
+  const v = h === 'roster' ? 'roster' : (h === 'quota' || h === 'rules') ? 'quota' : (state.data || state.roster ? state.view : 'quota');
   await setView(v);
   if (h === 'settings' && state.data) openSettings();
   if (h === 'admins' && state.data) openAdmins();
   if (h === 'rules' && state.data) openRules();
   if (h === 'dperm') openDperm();
-  renderMenu(h);
+  renderMenu(h === 'rules' ? 'quota' : h);
 }
 window.addEventListener('hashchange', () => { if (state.me) applyHash(); });
 
@@ -520,12 +623,11 @@ window.addEventListener('hashchange', () => { if (state.me) applyHash(); });
 const NAV = [
   { id: 'leave',    label: '我的劃假', href: 'index.html',         show: me => me.staff },
   { id: 'roster',   label: '排休總表', href: 'admin.html#roster',   show: me => me.admin },
-  { id: 'dispatch', label: '派工',     href: 'dispatch.html',       show: me => me.admin },
   { id: 'quota',    label: '名額設定', href: 'admin.html#quota',    show: me => me.admin },
-  { id: 'rules',    label: '職務名額', href: 'admin.html#rules',    show: me => me.admin },
   { id: 'settings', label: '系統設定', href: 'admin.html#settings', show: me => me.admin },
   { id: 'admins',   label: '管理員',   href: 'admin.html#admins',   show: me => me.owner },
-  { id: 'dperm',    label: '派工權限', href: 'admin.html#dperm',    show: me => me.admin },
+  { id: 'dispatch', label: '派工',     href: 'dispatch.html',       show: me => me.admin },
+  { id: 'dperm',    label: '派工權限', href: 'admin.html#dperm', show: me => me.admin },
   { id: 'schedule', label: '班表',     href: 'dispatch.html',       show: me => !me.admin && !!me.dispatchRole }
 ];
 // 不是管理員的人，問派工系統有沒有開放看班表；有的話選單多一個「班表」
@@ -546,7 +648,7 @@ function renderMenu(active){
 }
 
 function showLogin(msg){ closePanel(); $('#app').classList.add('hidden'); $('#login').classList.remove('hidden'); $('#loginMsg').textContent = msg || ''; }
-function logout(msg){ state.token = null; state.me = null; store.del('token'); if (window.google) google.accounts.id.disableAutoSelect(); showLogin(msg); }
+function logout(msg){ try { sessionStorage.removeItem('fsActAs'); sessionStorage.removeItem('fsActPicked'); } catch(e){} state.token = null; state.me = null; store.del('token'); if (window.google) google.accounts.id.disableAutoSelect(); showLogin(msg); }
 
 /* ===== API ===== */
 async function api(action, extra){
@@ -555,9 +657,34 @@ async function api(action, extra){
     const res = await fetch(CONFIG.API_URL, { method:'POST', body: JSON.stringify(Object.assign({ action, idToken: state.token }, extra || {})) });
     data = await res.json();
   } catch(e){ const err = new Error('連線失敗，請檢查網路後再試'); err.code = 'NETWORK'; throw err; }
+  if (data.fs){ if (window.LeaveFS) LeaveFS._set(data.fs); renderTestAdm(data.fs); }
   if (!data.ok){ const err = new Error(data.error || '發生錯誤'); err.code = data.code; throw err; }
   return data;
 }
+/* ===== 測試模式（系統擁有者切換；測試模式中管理員可以模擬同仁） ===== */
+function renderTestAdm(fs){
+  state.fs = fs;
+  const box = $('#testAdm');
+  $('#testField').classList.toggle('hidden', !(fs.owner || fs.test));
+  $('#tOwnerRow').classList.toggle('hidden', !fs.owner);
+  box.querySelectorAll('.seg2 button').forEach(b => b.classList.toggle('on', (b.dataset.t === '1') === !!fs.test));
+  $('#tModeNote').textContent = fs.test ? '測試模式中：管理員可以模擬任何一位同仁。正式開放前記得切回上線模式，並清掉測試時劃的假。' : '上線模式：大家只能用自己的身分。要讓管理員模擬同仁測試，切到測試模式。';
+  $('#tActRow').classList.toggle('hidden', !fs.test);
+  if (window.LeaveFS) LeaveFS.maybePickActAs(fs);
+  const sel = $('#tStaff');
+  if (fs.test && !sel.options.length && window.LeaveFS){
+    LeaveFS.staffList().sort((a, b) => (a.store + a.role + a.name).localeCompare(b.store + b.role + b.name, 'zh-Hant'))
+      .forEach(p => { const o = el('option', '', p.name + '・' + p.store + p.role); o.value = p.email; sel.appendChild(o); });
+  }
+}
+document.querySelectorAll('#testAdm .seg2 button').forEach(b => { b.onclick = async () => {
+  const on = b.dataset.t === '1';
+  if (!state.fs || !!state.fs.test === on || state.busy) return;
+  setBusy(true);
+  try { const r = await api('fsSetTestMode', { on }); renderTestAdm(Object.assign({}, state.fs, { test: on })); toast(r.message); }
+  catch(e){ handleError(e); } finally { setBusy(false); }
+}; });
+document.addEventListener('click', ev => { if (ev.target && ev.target.id === 'tGo'){ const v = $('#tStaff').value; if (!v) return; LeaveFS.actAs(v); location.href = 'index.html'; } });
 function handleError(e){
   if (e.code === 'AUTH'){ logout(e.message); if (window.google) google.accounts.id.prompt(); return; }
   if (e.code === 'NOT_ADMIN' || e.code === 'SETUP'){ logout(e.message); return; }
@@ -590,10 +717,175 @@ function setView(v){
   return load(state.month);
 }
 
+/* ===== 待審核：許願、事假／病假／特休申請 ===== */
+function renderReview(r){
+  const box = $('#reviewBox'); box.textContent = '';
+  const items = [];
+  r.people.forEach(p => {
+    const mine = r.leaves[p.key] || {};
+    Object.keys(mine).forEach(d => { const t = mine[d]; if (t === '許願' || /申請$/.test(t)) items.push({ p, d, t }); });
+  });
+  items.sort((a, b) => a.d.localeCompare(b.d) || a.p.name.localeCompare(b.p.name));
+  box.classList.toggle('hidden', !items.length);
+  if (!items.length) return;
+  const h = el('h3', '', '待審核 ' + items.length + ' 筆'); h.appendChild(el('small', '', '許願核准＝變成公排；請假放行＝變成事假／病假／特休'));
+  box.appendChild(h);
+  items.forEach(it => {
+    const row = el('div', 'rv');
+    const who = el('span', 'who', it.p.name); who.appendChild(el('small', '', it.p.store + it.p.role + '・' + Number(it.d.slice(5, 7)) + '/' + Number(it.d.slice(8)) + '（' + '日一二三四五六'.charAt(new Date(it.d + 'T00:00:00').getDay()) + '）'));
+    row.appendChild(who);
+    row.appendChild(el('span', lvClass(it.t), it.t === '許願' ? '許願' : it.t.replace('申請', '')));
+    const yes = el('button', 'yes', it.t === '許願' ? '核准（排公排）' : '放行');
+    const no = el('button', 'no', it.t === '許願' ? '不給' : '不放行');
+    yes.onclick = () => reviewAct(it, it.t === '許願' ? '公排' : it.t.replace('申請', ''));
+    no.onclick = () => { if (no.dataset.ask){ reviewAct(it, null); } else { no.dataset.ask = 1; no.textContent = '確定？'; } };
+    row.appendChild(yes); row.appendChild(no);
+    box.appendChild(row);
+  });
+}
+async function reviewAct(it, type){
+  if (state.busy) return;
+  setBusy(true);
+  try {
+    const r = await api('adminSetLeave', { key: it.p.key, date: it.d, type, force: true });
+    renderRoster(r);
+    toast(type === null ? '已退回 ' + it.p.name + ' 的' + (it.t === '許願' ? '許願' : it.t) : '已' + (it.t === '許願' ? '核准 ' : '放行 ') + it.p.name + ' ' + Number(it.d.slice(5, 7)) + '/' + Number(it.d.slice(8)));
+  } catch(e){ handleError(e); }
+  finally { setBusy(false); }
+}
+
+/* ===== 劃假順序 ===== */
+function renderOrder(r){
+  const box = $('#orderIn'); box.textContent = '';
+  const groups = Object.keys(r.orders || {}).sort((a, b) => {
+    const [ra, sa] = a.split('|'), [rb, sb] = b.split('|');
+    const ri = x => { const i = (r.roles || []).indexOf(x); return i < 0 ? 99 : i; }, si = x => { if (x === '全公司') return -1; const i = (r.stores || []).indexOf(x); return i < 0 ? 99 : i; };
+    return ri(ra) - ri(rb) || si(sa) - si(sb);
+  });
+  if (!groups.length){ box.appendChild(el('div', 'tag', '目前沒有可以排順序的同仁（要有 Gmail、職務、門市）')); return; }
+  if (!state.oGroup || groups.indexOf(state.oGroup) < 0) state.oGroup = groups[0];
+  const og0 = r.orders[state.oGroup];
+  const nameOf = e => { const p = r.people.find(x => x.key === e); return p ? p.name + (og0.all && p.store ? '（' + p.store + '）' : '') : e; };
+  const bar = el('div', 'ordbar');
+  const sel = el('select');
+  groups.forEach(g => { const o = el('option', '', g.split('|')[1] + ' ' + g.split('|')[0] + (r.orders[g].active ? '（照順序）' : r.orders[g].overridden ? '（照全公司）' : '')); o.value = g; sel.appendChild(o); });
+  sel.value = state.oGroup;
+  sel.onchange = () => { state.oGroup = sel.value; state.oDraft = null; renderOrder(r); };
+  bar.appendChild(sel);
+  const og = r.orders[state.oGroup];
+  if (!state.oDraft || state.oDraft.g !== state.oGroup + '|' + r.month) state.oDraft = { g: state.oGroup + '|' + r.month, list: og.list.slice(), n: og.active ? og.n : og.list.length, dirty: false };
+  const dr = state.oDraft;
+  const save = el('button', 'save', og.active ? (dr.dirty ? '儲存新順序' : '已照這個順序') : '啟用：照這個順序劃假');
+  save.disabled = !dr.n;
+  save.onclick = () => orderAct({ emails: dr.list.slice(0, dr.n), free: dr.n < dr.list.length });
+  bar.appendChild(save);
+  if (og.active){ const off = el('button', '', '取消順序（大家都能劃）'); off.onclick = () => orderAct({ emails: null }); bar.appendChild(off); }
+  box.appendChild(bar);
+  if (og.overridden) box.appendChild(el('div', 'tag warn', '這個職務已經啟用「全公司」順序，同仁會照全公司那條輪；這裡的門市順序先不管，取消全公司順序後才會恢復。'));
+  else if (og.all && !og.active) box.appendChild(el('div', 'tag', '全公司順序：所有門市的這個職務排成一條，一次只有一個人能劃。啟用後，各門市的順序先暫停。'));
+  box.appendChild(el('div', 'tag', og.active ? '輪到的人按「送出」後才換下一位；卡住的話可以按「代送出」。' : '還沒啟用：這組同仁現在不用排隊。用 ↑↓ 排好順序後按「啟用」。'));
+  box.appendChild(el('div', 'tag', '只想指定部分人：按「不排」把人移到下面的「自由搶」區，指定的人都送出後，自由搶區的人才開放一起搶。'));
+  const ol = el('ul', 'ol');
+  const subs = r.submits || {};
+  const freeHead = () => { const li = el('li', 'freehd'); li.appendChild(el('span', 'nm', '▼ 自由搶（指定的人都送出後才開放，先劃先贏）')); return li; };
+  const move = (from, to) => { const l = dr.list; const [x] = l.splice(from, 1); l.splice(to, 0, x); };
+  dr.list.forEach((e, i) => {
+    if (i === dr.n) ol.appendChild(freeHead());
+    if (i >= dr.n) {
+      const li = el('li', 'free' + (subs[e] ? ' sub' : ''));
+      li.appendChild(el('span', 'no', '・'));
+      li.appendChild(el('span', 'nm', nameOf(e)));
+      li.appendChild(el('span', 'st', subs[e] ? '✓ 已送出' : ''));
+      const add = el('button', '', '加入順序');
+      add.onclick = () => { move(i, dr.n); dr.n++; dr.dirty = true; renderOrder(r); };
+      li.appendChild(add);
+      const sb2 = el('button', '', subs[e] ? '撤回' : '代送出');
+      sb2.onclick = () => submitForAct(e, !subs[e], nameOf(e));
+      li.appendChild(sb2);
+      ol.appendChild(li);
+      return;
+    }
+    const li = el('li', (og.active && og.turn === e ? 'turn' : '') + (subs[e] ? ' sub' : ''));
+    li.appendChild(el('span', 'no', String(i + 1)));
+    li.appendChild(el('span', 'nm', nameOf(e)));
+    li.appendChild(el('span', 'st', subs[e] ? '✓ 已送出 ' + (subs[e].at || '').slice(5) + (subs[e].by && subs[e].by !== e ? '（代送出）' : '') : (og.active && og.turn === e ? '← 劃假中' : '')));
+    const up = el('button', '', '↑'); up.disabled = i === 0;
+    up.onclick = () => { const l = dr.list; [l[i - 1], l[i]] = [l[i], l[i - 1]]; dr.dirty = true; renderOrder(r); };
+    const dn = el('button', '', '↓'); dn.disabled = i >= dr.n - 1;
+    dn.onclick = () => { const l = dr.list; [l[i + 1], l[i]] = [l[i], l[i + 1]]; dr.dirty = true; renderOrder(r); };
+    const out = el('button', '', '不排');
+    out.onclick = () => { move(i, dr.n - 1); dr.n--; dr.dirty = true; renderOrder(r); };
+    li.appendChild(up); li.appendChild(dn); li.appendChild(out);
+    const sb = el('button', '', subs[e] ? '撤回' : '代送出');
+    sb.onclick = () => submitForAct(e, !subs[e], nameOf(e));
+    li.appendChild(sb);
+    ol.appendChild(li);
+  });
+  if (dr.n === 0) ol.insertBefore(el('li', 'freehd', '請至少留一位在順序裡'), ol.firstChild);
+  box.appendChild(ol);
+}
+/** 系統設定裡的劃假順序：排休總表開著就一起更新，不然只更新順序區 */
+function afterOrder(r){
+  if (state.view === 'roster' && (!state.month || state.month === r.month)) renderRoster(r);
+  else { state.roster = r; renderOrder(r); }
+  paintOrderMonths(r.month);
+}
+function openMonths(){
+  const c = (state.data && state.data.config) || {};
+  const start = c.startMonth || addMonths(thisMonth(), 1);
+  const out = []; for (let i = 0; i < Math.max(1, c.monthCount || 1); i++) out.push(addMonths(start, i));
+  return out;
+}
+function paintOrderMonths(cur){
+  const box = $('#orderMonths'); box.textContent = '';
+  const ms = openMonths();
+  if (ms.length < 2) return;
+  ms.forEach(m => {
+    const b = el('button', m === cur ? 'on' : '', Number(m.slice(5)) + ' 月送出狀況');
+    b.type = 'button';
+    b.onclick = () => loadOrderMonth(m);
+    box.appendChild(b);
+  });
+}
+async function loadOrderMonth(m){
+  if (state.busy) return;
+  if (state.roster && state.roster.month === m){ renderOrder(state.roster); paintOrderMonths(m); return; }
+  $('#orderIn').textContent = '讀取中…';
+  try { const r = await api('adminRoster', { month: m }); afterOrder(r); }
+  catch(e){ $('#orderIn').textContent = ''; handleError(e); }
+}
+async function orderAct(extra){
+  if (state.busy) return;
+  const [role, store] = state.oGroup.split('|');
+  setBusy(true);
+  try {
+    const r = await api('adminSetOrder', Object.assign({ month: state.roster.month, role, store }, extra));
+    state.oDraft = null;
+    afterOrder(r.people ? r : await api('adminRoster', { month: state.roster.month }));
+    toast(r.message || '已儲存');
+  } catch(e){ handleError(e); }
+  finally { setBusy(false); }
+}
+async function submitForAct(email, submit, name){
+  if (state.busy) return;
+  setBusy(true);
+  try {
+    const r = await api('adminSubmitFor', { month: state.roster.month, key: email, submit });
+    afterOrder(r);
+    toast(r.message || (submit ? '已代 ' + name + ' 送出' : '已撤回'));
+  } catch(e){ handleError(e); }
+  finally { setBusy(false); }
+}
+
 /* ===== 排休總表 ===== */
 const T_SELF = '自排', T_MGR = '公排';
-function lvClass(t){ return [T_SELF, T_MGR, '特休'].indexOf(t) >= 0 ? 'lv lv-' + t : 'lv lv-other'; }
-function lvShort(t){ return { '自排': '自', '公排': '排', '特休': '特' }[t] || String(t).slice(0, 1); }
+function lvClass(t){
+  if ([T_SELF, T_MGR, '特休', '許願'].indexOf(t) >= 0) return 'lv lv-' + t;
+  if (/申請$/.test(t)) return 'lv lv-apply';
+  if (t === '事假' || t === '病假') return 'lv lv-kind';
+  return 'lv lv-other';
+}
+function lvShort(t){ return { '自排': '自', '公排': '排', '特休': '特', '許願': '願' }[t] || String(t).slice(0, 1); }
 function renderRoster(r){
   state.roster = r; state.month = r.month;
   const [y, m] = r.month.split('-');
@@ -655,6 +947,7 @@ function renderRoster(r){
   fr.appendChild(el('td')); fr.appendChild(el('td')); fr.appendChild(el('td')); fr.appendChild(el('td'));
   tf.appendChild(fr); t.appendChild(tf);
   $('#foot').textContent = '管理後台 v' + VERSION + '・後端 v' + r.version + '・更新於 ' + r.serverTime.slice(11, 19);
+  renderReview(r); renderOrder(r);
   if (state.leave) fillLeave();
 }
 function openLeave(p, day){
@@ -702,17 +995,20 @@ async function setLeave(type, force){
 /* ===== 畫面 ===== */
 function render(d){
   state.data = d; state.month = d.month;
+  renderRuleSum(d);
   if (!state.store || d.stores.indexOf(state.store) < 0) state.store = d.stores[0];
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
   $('#who').textContent = d.admin;
   const isOwner = d.role === 'owner';
   $('#roleBadge').textContent = isOwner ? '系統擁有者' : '管理員';
   $('#roleBadge').className = 'badge' + (isOwner ? ' owner' : '');
+  $('#syncField').hidden = !isOwner;   // 跟試算表同步：只有系統擁有者看得到
   if ($('#adminPanel').classList.contains('show')) fillAdmins();
   const [y, m] = d.month.split('-');
   $('#monthLabel').textContent = y + ' 年 ' + Number(m) + ' 月';
   $('#bookingTag').innerHTML = '';
   $('#bookingTag').append('目前開放劃假：', el('b', '', d.bookingMonth));
+  renderMode(d.config);
 
   if (state.view === 'roster') return;
   const chips = $('#stores'); chips.textContent = '';
@@ -797,7 +1093,7 @@ function openPanel(role, i){
     rb.textContent = '恢復預設（刪除這個特別設定）';
     const parts = [];
     if (!c.override.role) parts.push('所有職位');
-    if (!c.override.store) parts.push('所有門市');
+    if (!c.override.store) parts.push('北部和台中');
     rw.classList.toggle('hidden', !parts.length);
     rw.textContent = parts.length ? '注意：這個特別設定套用在' + parts.join('、') + '，恢復預設會一起恢復。' : '';
   } else { rb.classList.add('hidden'); rw.classList.add('hidden'); }
@@ -1054,19 +1350,39 @@ function showPickConfirm(job, msg){
 
 /* ===== 職務與每日名額 ===== */
 const DAYS3 = [['平日', '平日'], ['六', '週六'], ['日', '週日']];
+/** 某職務、某日別、某一區的預設名額（跟後端 slot_ 一樣挑第一條符合的規則） */
+function regionRule(d, role, dt, region){
+  const rep = ((d.regionStores || {})[region] || [region])[0];
+  return d.rulesConfig.rules.find(r => r.role === role && r.dayType === dt && (!r.stores.length || r.stores.indexOf(rep) >= 0)) || null;
+}
 function buildRulesModel(){
-  const d = state.data, rc = d.rulesConfig, model = {};
+  const d = state.data, model = {};
   d.roles.forEach(role => {
     model[role] = {};
     DAYS3.forEach(([dt]) => {
-      const rs = rc.rules.filter(r => r.role === role && r.dayType === dt);
-      const primary = rs.find(r => r.scope === '合計') || rs.find(r => !r.stores.length) || rs[0];
-      const m = { scope: primary && primary.scope === '合計' ? '合計' : '各門市', quota: primary ? primary.quota : 1, ex: [] };
-      rs.filter(r => r !== primary).forEach(r => r.stores.forEach(st => m.ex.push({ store: st, quota: r.quota })));
+      const m = {};
+      d.stores.forEach(rg => { const r = regionRule(d, role, dt, rg); m[rg] = r ? r.quota : 1; });
       model[role][dt] = m;
     });
   });
-  state.rm = { controlled: new Set(rc.controlled), model };
+  state.rm = { controlled: new Set(d.rulesConfig.controlled), model };
+}
+/** 名額設定上方的「預設規則」摘要 */
+function renderRuleSum(d){
+  const box = $('#ruleSumBody'); if (!box || !d || !d.rulesConfig) return;
+  box.textContent = '';
+  const rc = d.rulesConfig, ctl = new Set(rc.controlled), free = [];
+  d.roles.forEach(role => {
+    if (!ctl.has(role)){ free.push(role); return; }
+    const parts = DAYS3.map(([dt, label]) => label + ' ' + d.stores.map(rg => { const r = regionRule(d, role, dt, rg); return rg + ' ' + (r ? r.quota : '－'); }).join('、'));
+    const row = el('div', 'rs'); row.appendChild(el('b', '', role)); row.appendChild(el('span', '', parts.join('・'))); box.appendChild(row);
+  });
+  if (free.length){ const row = el('div', 'rs'); row.appendChild(el('b', '', '不限人數')); row.appendChild(el('span', '', free.join('、'))); box.appendChild(row); }
+  // 還有舊的規則（全公司合計、各門市各自算）→ 提醒按一次儲存改成兩區
+  const rs = d.regionStores || {}, key = a => (a || []).slice().sort().join(',');
+  const regionKeys = Object.keys(rs).map(r => key(rs[r]));
+  const legacy = rc.rules.some(r => ctl.has(r.role) && (r.scope !== '合計' || regionKeys.indexOf(key(r.stores)) < 0));
+  if (legacy){ const w = el('div', 'tag warn', '目前還有舊的規則（例如「全公司合計」其實把台中也算進去）。按「編輯預設規則」→「儲存」一次，就會改成北部、台中兩區各自一份名額。'); box.appendChild(w); }
 }
 function openRules(){
   buildRulesModel(); renderRules();
@@ -1081,7 +1397,6 @@ function miniStepper(get, set){
 }
 function renderRules(){
   const box = $('#rList'); box.textContent = '';
-  const stores = state.data.stores;
   state.data.roles.forEach(role => {
     const on = state.rm.controlled.has(role);
     const card = el('div', 'rcard' + (on ? '' : ' off'));
@@ -1096,25 +1411,11 @@ function renderRules(){
         const m = state.rm.model[role][dt];
         const row = el('div', 'rrow');
         row.appendChild(el('b', '', label));
-        const sel = el('select');
-        [['各門市', '每間門市各自算'], ['合計', '全公司合計']].forEach(([v, t]) => { const o = el('option', '', t); o.value = v; sel.appendChild(o); });
-        sel.value = m.scope; sel.onchange = () => { m.scope = sel.value; };
-        row.appendChild(sel);
-        row.appendChild(miniStepper(() => m.quota, v => { m.quota = v; }));
-        const exl = el('div', 'exl');
-        m.ex.forEach((x, i) => {
-          const chip = el('span', 'ex');
-          const ss = el('select'); stores.forEach(st => { const o = el('option', '', st); o.value = st; ss.appendChild(o); });
-          ss.value = x.store; ss.onchange = () => { x.store = ss.value; };
-          chip.append(ss, '另計');
-          chip.appendChild(miniStepper(() => x.quota, v => { x.quota = v; }));
-          const rm = el('button', 'x', '✕'); rm.title = '移除'; rm.onclick = () => { m.ex.splice(i, 1); renderRules(); };
-          chip.appendChild(rm); exl.appendChild(chip);
+        state.data.stores.forEach(rg => {
+          const w = el('span', 'rg'); w.appendChild(el('small', '', rg));
+          w.appendChild(miniStepper(() => m[rg], v => { m[rg] = v; }));
+          row.appendChild(w);
         });
-        const add = el('button', 'add', '＋ 某間門市另外算');
-        add.onclick = () => { const used = m.ex.map(x => x.store); m.ex.push({ store: stores.find(st => used.indexOf(st) < 0) || stores[0], quota: 1 }); renderRules(); };
-        exl.appendChild(add);
-        row.appendChild(exl);
         body.appendChild(row);
       });
       card.appendChild(body);
@@ -1124,14 +1425,11 @@ function renderRules(){
 }
 async function saveRules(){
   if (state.busy) return;
-  const stores = state.data.stores, rules = [];
-  for (const role of state.data.roles){
-    for (const [dt, label] of DAYS3){
+  const d = state.data, rules = [];
+  for (const role of d.roles){
+    for (const [dt] of DAYS3){
       const m = state.rm.model[role][dt];
-      const exStores = m.ex.map(x => x.store);
-      if (new Set(exStores).size !== exStores.length){ toast(role + ' ' + label + '：同一間門市重複了', true); return; }
-      rules.push({ role, dayType: dt, scope: m.scope, stores: exStores.length ? stores.filter(st => exStores.indexOf(st) < 0) : [], quota: m.quota, note: '' });
-      m.ex.forEach(x => rules.push({ role, dayType: dt, scope: '各門市', stores: [x.store], quota: x.quota, note: '' }));
+      d.stores.forEach(rg => rules.push({ role, dayType: dt, scope: '合計', stores: (d.regionStores || {})[rg] || [rg], quota: m[rg], note: rg + '合計' }));
     }
   }
   const controlled = state.data.roles.filter(r => state.rm.controlled.has(r));
@@ -1181,7 +1479,7 @@ async function saveDperm(list, everyone){
   if (state.busy) return;
   setBusy(true);
   try { state.dperm = await dapi('setPerms', { list, everyone }); $('#dEmail').value = ''; fillDperm(); toast('已更新派工權限'); }
-  catch(e){ toast(e.message, true); if (state.dperm) fillDperm(); if (e.code === 'AUTH') handleError(e); }
+  catch(e){ toast(e.message, true); if (state.dperm) fillDperm(); }
   finally { setBusy(false); }
 }
 
@@ -1218,6 +1516,71 @@ async function saveAdmins(list){
   finally { setBusy(false); }
 }
 
+/* ===== 劃假狀態（依預約時間／手動開放／手動暫停） ===== */
+function renderMode(c){
+  if (!c) return;
+  const mode = c.mode || '自動', st = c.status || '';
+  const box = $('#modeState');
+  let title, sub = '';
+  if (mode === '開放'){ title = '手動開放中'; sub = '同仁可以劃假・預約時間暫不生效'; }
+  else if (mode === '暫停'){ title = '手動暫停中'; sub = '同仁只能查看、不能劃假或取消・預約時間暫不生效'; }
+  else if (st === 'open'){ title = '開放中（依預約時間）'; sub = c.closeAt + ' 自動結束'; }
+  else if (st === 'before'){ title = '尚未開放（依預約時間）'; sub = c.openAt + ' 自動開放'; }
+  else if (st === 'closed'){ title = '已結束（依預約時間）'; sub = c.closeAt + ' 已自動結束'; }
+  else { title = '還沒設定預約時間'; sub = '按右邊「切換開放／暫停」設定'; }
+  box.className = 'mstate ' + (mode === '開放' ? 'open' : mode === '暫停' ? 'paused' : st);
+  $('#modeTitle').textContent = title; $('#modeSub').textContent = sub;
+  const now = $('#sModeNow');
+  if (now){ now.className = box.className; now.querySelector('b').textContent = '目前：' + title; now.querySelector('small').textContent = sub; }
+}
+const MODE_NOTE = {
+  '自動': '時間到自動開放、自動結束（下面的預約時間要填好）',
+  '開放': '馬上開放，一直開著直到你改回來；預約時間暫不生效',
+  '暫停': '馬上鎖住，同仁只能查看、不能劃假或取消；管理員照樣可以排'
+};
+function paintSMode(){
+  document.querySelectorAll('#sMode button').forEach(b => b.classList.toggle('on', b.dataset.m === state.sMode));
+  $('#sModeNote').textContent = MODE_NOTE[state.sMode] || '';
+  // 預約時間只有選「依預約時間」才出現
+  $('#sTimeField').classList.toggle('hidden', state.sMode !== '自動');
+}
+const MODE_LABEL = { '自動': '依預約時間', '開放': '手動開放', '暫停': '手動暫停' };
+async function setMode(m){
+  const c = state.data && state.data.config;
+  if (!c || state.busy || m === (c.mode || '自動')) return;
+  // 按兩次才切換，避免手滑
+  if (state.modeAsk !== m){
+    state.modeAsk = m;
+    document.querySelectorAll('#modeSeg button').forEach(b => { const ask = b.dataset.m === m; b.classList.toggle('ask', ask); b.textContent = ask ? '確定' + MODE_LABEL[m].replace('依', '改依') + '？' : MODE_LABEL[b.dataset.m]; });
+    return;
+  }
+  setBusy(true);
+  try { const d = await api('adminSetMode', { mode: m }); render(d); toast(d.message || '已切換'); }
+  catch(e){ renderMode(c); handleError(e); }
+  finally { setBusy(false); }
+}
+
+const SYNC_LABEL = { pull: 'Firestore → 試算表', push: '試算表 → Firestore（只有設定）', pushAll: '試算表 → Firestore（含劃假紀錄）' };
+async function runSync(op, btn){
+  const c = state.data && state.data.config;
+  if (state.busy || !c || state.data.role !== 'owner') return;
+  if (op === 'pushAll' && c.mode !== '暫停'){ toast('要連劃假紀錄一起同步，請先按上面的「手動暫停」', true); return; }
+  if (state.syncAsk !== op){
+    state.syncAsk = op;
+    document.querySelectorAll('#syncBox button').forEach(b => { b.classList.toggle('ask', b === btn); b.querySelector('b').textContent = b === btn ? '再按一次確定：' + SYNC_LABEL[op] : SYNC_LABEL[b.dataset.op]; });
+    return;
+  }
+  state.syncAsk = null;
+  document.querySelectorAll('#syncBox button').forEach(b => { b.classList.remove('ask'); b.querySelector('b').textContent = SYNC_LABEL[b.dataset.op]; });
+  setBusy(true);
+  try {
+    const r = await api('fsSync', { op });
+    toast(r.message || '同步完成');
+    if (op !== 'pull'){ const d = await api('adminLoad', { month: state.month }); render(d); }
+  } catch(e){ handleError(e); }
+  finally { setBusy(false); }
+}
+
 /* ===== 系統設定 ===== */
 function addMonths(mo, n){ const [y, m] = mo.split('-').map(Number); const t = new Date(y, m - 1 + n, 1); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0'); }
 function thisMonth(){ const t = new Date(); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0'); }
@@ -1237,6 +1600,7 @@ function openSettings(){
   const cnt = $('#sCount'); cnt.textContent = '';
   for (let i = 1; i <= 6; i++){ const o = el('option', '', i + ' 個月'); o.value = i; cnt.appendChild(o); }
   cnt.value = Math.min(6, c.monthCount || 1);
+  state.sMode = c.mode || '自動'; paintSMode();
   $('#sOpen').value = toLocalInput(c.openAt);
   $('#sClose').value = toLocalInput(c.closeAt);
   $('#sLeave').value = c.monthOff; $('#sWeekend').value = c.maxWeekend; $('#sConsec').value = c.maxConsecutive;
@@ -1245,6 +1609,8 @@ function openSettings(){
   renderRoleLeave();
   updatePreview();
   $('#backdrop').classList.add('show'); $('#setPanel').classList.add('show');
+  const ms = openMonths();
+  loadOrderMonth(state.roster && ms.indexOf(state.roster.month) >= 0 ? state.roster.month : ms[0]);
 }
 function updatePreview(){
   const c = state.data.config;
@@ -1278,6 +1644,7 @@ async function saveSettings(){
   if (state.busy) return;
   const settings = {
     startMonth: $('#sStart').value, monthCount: Number($('#sCount').value),
+    mode: state.sMode || '自動',
     openAt: fromLocalInput($('#sOpen').value), closeAt: fromLocalInput($('#sClose').value),
     monthOff: Number($('#sLeave').value), maxWeekend: Number($('#sWeekend').value), maxConsecutive: Number($('#sConsec').value),
     roleLeave: Object.fromEntries(Object.keys(state.rl).filter(r => state.rl[r].on).map(r => [r, { self: state.rl[r].self, mgr: state.rl[r].mgr }]))
@@ -1345,11 +1712,15 @@ $('#aClose').onclick = closePanel;
 $('#sStart').onchange = updatePreview;
 $('#sCount').onchange = updatePreview;
 $('#sSave').onclick = saveSettings;
+$('#modeEdit').onclick = () => openSettings();
+document.querySelectorAll('#sMode button').forEach(b => { b.onclick = () => { state.sMode = b.dataset.m; paintSMode(); }; });
+document.querySelectorAll('#syncBox button').forEach(b => { b.onclick = () => runSync(b.dataset.op, b); });
 $('#sLeave').oninput = () => { if (state.rl) renderRoleLeave(); };
 $('#sCancel').onclick = closePanel;
 $('#dCancel').onclick = closePanel;
 $('#rCancel').onclick = closePanel;
 $('#rSave').onclick = saveRules;
+$('#ruleEdit').onclick = () => { if (state.data) openRules(); };
 $('#byDateBtn').onclick = openList;
 $('#liOnly').onchange = fillList;
 $('#liClose').onclick = closePanel;
@@ -1358,6 +1729,65 @@ $('#ppPickBtn').onclick = () => { if (state.pickKey) openPerson(state.pickKey, t
 $('#dSave').onclick = saveDay;
 document.querySelectorAll('input[name=dmode]').forEach(r => r.onchange = syncDayMode);
 </script>
+<script>
+/* 試算表版：測試模式（系統擁有者切換；管理員可以模擬同仁），資料由 Apps Script 回傳 */
+window.FS_ALLOW_ACT_AS = false;
+(function(){
+  const AS_KEY = 'fsActAs', PICKED_KEY = 'fsActPicked';
+  let cur = null;
+  function showPicker(fs) {
+    const list = window.LeaveFS.staffList().sort((x, y) => (x.store + x.role + x.name).localeCompare(y.store + y.role + y.name, 'zh-Hant'));
+    const wrap = document.createElement('div');
+    wrap.id = 'fsPick';
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(40,30,25,.55);display:flex;align-items:flex-end;justify-content:center';
+    wrap.innerHTML = '<div style="background:#fffaf5;width:min(480px,100%);max-height:88vh;display:flex;flex-direction:column;border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));font-size:15px;color:#3a2e28;box-shadow:0 -6px 30px rgba(0,0,0,.2)">' +
+      '<div style="font-weight:700;font-size:17px">🧪 測試模式：要用誰的身分進入？</div>' +
+      '<div style="font-size:13px;color:#8a7b70;margin:4px 0 10px">選一位同仁，就會看到他的劃假畫面；劃假、許願、送出都會真的寫入。</div>' +
+      '<button type="button" data-self="1" style="font:inherit;border:1.5px solid #3a2e28;background:#3a2e28;color:#fff;border-radius:12px;padding:11px;margin-bottom:10px;cursor:pointer">用我自己的身分（' + (fs.real || '') + '）進入</button>' +
+      '<input type="search" placeholder="搜尋姓名、門市、職務" style="font:inherit;border:1px solid #e4d8cc;border-radius:10px;padding:9px 11px;margin-bottom:8px">' +
+      '<div class="lst" style="overflow:auto;display:grid;gap:6px;padding-bottom:4px"></div></div>';
+    document.body.appendChild(wrap);
+    const box = wrap.querySelector('.lst'), q = wrap.querySelector('input');
+    const draw = () => {
+      const k = q.value.trim();
+      box.innerHTML = '';
+      list.filter(p => !k || (p.name + p.store + p.role + p.email).indexOf(k) >= 0).forEach(p => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.style.cssText = 'font:inherit;text-align:left;border:1px solid #e4d8cc;background:#fff;border-radius:10px;padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;gap:8px';
+        b.innerHTML = '<b></b><span style="color:#8a7b70;font-size:13px"></span>';
+        b.querySelector('b').textContent = p.name;
+        b.querySelector('span').textContent = p.store + '・' + p.role;
+        b.onclick = () => { window.LeaveFS.actAs(p.email); location.href = 'index.html'; };
+        box.appendChild(b);
+      });
+      if (!box.children.length) box.innerHTML = '<div style="color:#8a7b70;font-size:13px;padding:8px">找不到符合的同仁</div>';
+    };
+    q.oninput = draw; draw();
+    wrap.querySelector('[data-self]').onclick = () => {
+      try { sessionStorage.setItem(PICKED_KEY, '1'); sessionStorage.removeItem(AS_KEY); } catch (e) {}
+      wrap.remove();
+      if (window.FS_ALLOW_ACT_AS && fs.as) location.reload();
+    };
+  }
+
+  window.LeaveFS = {
+    sheets: true,
+    _set(fs){ cur = fs; },
+    staffList(){ return ((cur && cur.staff) || []).map(p => Object.assign({}, p)); },
+    actAs(email){ try { if (email) sessionStorage.setItem(AS_KEY, email); else sessionStorage.removeItem(AS_KEY); sessionStorage.setItem(PICKED_KEY, '1'); } catch (e) {} },
+    actingAs(){ try { return sessionStorage.getItem(AS_KEY) || ''; } catch (e) { return ''; } },
+    maybePickActAs(fs){
+      let picked = '';
+      try { picked = sessionStorage.getItem(PICKED_KEY) || ''; } catch (e) {}
+      if (!fs || !fs.test || !fs.admin || fs.as || picked || document.getElementById('fsPick')) return;
+      cur = fs; showPicker(fs);
+    },
+    pickActAs(fs){ cur = fs || cur; showPicker(fs || cur || {}); }
+  };
+})();
+</script>
 <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoad()"></script>
+
 </body>
 </html>
