@@ -155,7 +155,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--leave);border-radius:50%;animation:s 0.8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
-<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128m';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128r';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 
@@ -305,12 +305,12 @@ async function start(){
 const NAV = [
   { id: 'leave',    label: '我的劃假', href: 'index.html',         show: me => me.staff },
   { id: 'roster',   label: '排休總表', href: 'admin.html#roster',   show: me => me.admin },
-  { id: 'dispatch', label: '派工',     href: '../dispatch.html',       show: me => me.admin },
   { id: 'quota',    label: '名額設定', href: 'admin.html#quota',    show: me => me.admin },
   { id: 'rules',    label: '職務名額', href: 'admin.html#rules',    show: me => me.admin },
   { id: 'settings', label: '系統設定', href: 'admin.html#settings', show: me => me.admin },
   { id: 'admins',   label: '管理員',   href: 'admin.html#admins',   show: me => me.owner },
-  { id: 'dperm',    label: '派工權限', href: 'admin.html#dperm',    show: me => me.admin },
+  { id: 'dispatch', label: '派工',     href: '../dispatch.html',       show: me => me.admin },
+  { id: 'dperm',    label: '派工權限', href: '../admin.html#dperm', show: me => me.admin },
   { id: 'schedule', label: '班表',     href: '../dispatch.html',       show: me => !me.admin && !!me.dispatchRole }
 ];
 // 不是管理員的人，問派工系統有沒有開放看班表；有的話選單多一個「班表」
