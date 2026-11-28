@@ -105,11 +105,15 @@ button.lnk{border:0;background:none;color:var(--pri);padding:6px 2px;white-space
 .loading{padding:30px;text-align:center;color:var(--mute)}
 body.ro #pubBtn,body.ro #unpubBtn,body.ro #tabs [data-v]:not([data-v=out]),body.ro .oed,body.ro #undoM,body.ro #redoM,body.ro #sync{display:none!important}
 .pubst{font-size:13px;color:var(--mute);margin-right:4px}.pubst.ok{color:#3c7a4f}.pubst.chg{color:#b7791f;font-weight:600}.nopub{padding:40px 12px;text-align:center;color:var(--mute)}
+.calbtn{width:100%;border-color:var(--pri);color:var(--pri);font-weight:600}
+.cday{margin:14px 0 4px;font-weight:700;font-size:15px}.crow{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:9px 10px;margin:6px 0;background:var(--card)}
+.crow input{width:20px;min-height:20px;margin-top:2px;flex:none}.crow .cm{flex:1;min-width:0}.crow .cs{font-weight:600}.crow .co{font-size:12px;color:var(--mute);word-break:break-all;margin-top:2px}
+.crow .ct{display:inline-block;font-size:12px;border-radius:6px;padding:1px 6px;margin-left:6px;background:var(--line);color:var(--mute);font-weight:500}.crow .ct.hot{background:#f8e1dc;color:var(--hot)}.crow.off{opacity:.6}
 </style>
 </head>
 <body>
 <header class="top">
-  <div><h1>小日子派工系統</h1><p class="sub"><span id="ver">v1.4.1</span> · <span id="who">未登入</span> · <span id="sync" class="sync">—</span> <button id="logout" class="lk btnlk" hidden>登出</button></p></div>
+  <div><h1>小日子派工系統</h1><p class="sub"><span id="ver">v1.5.0</span> · <span id="who">未登入</span> · <span id="sync" class="sync">—</span> <button id="logout" class="lk btnlk" hidden>登出</button></p></div>
   <nav class="tabs" id="tabs">
     <button data-v="cal" class="on">月曆預排</button><button data-v="week">週派工</button><button data-v="out">班表預覽</button><button data-v="data">資料設定</button><a id="toLeave" class="tablk" href="admin.html#roster">劃假後台 ↗</a>
   </nav>
@@ -126,6 +130,7 @@ body.ro #pubBtn,body.ro #unpubBtn,body.ro #tabs [data-v]:not([data-v=out]),body.
   <section id="v-week" class="view" hidden>
     <div class="bar nav"><button id="prevW" aria-label="上一週">‹</button><h2 id="wTitle"></h2><button id="refW" class="ghost sm2" title="整週複製上週的派工">複製上週</button><button id="nextW" aria-label="下一週">›</button></div>
     <div class="bar"><button id="thisW2">本週</button><button id="nextW2">下週</button><button id="nextW3">下下週</button><span class="sp"></span><div class="ur" role="group" aria-label="復原與重做"><button id="undoW" disabled>↶ 復原</button><button id="redoW" disabled>重做 ↷</button></div></div>
+    <div class="bar"><button id="calW" class="calbtn">抓這週的行事曆案件</button></div>
     <p class="hint" id="wMsg"></p>
     <div class="lg"><span><i></i>拍攝</span><span><i class="pk"></i>挑片</span><span><b class="ab">助</b>攝影助理</span><span class="wn">紅框＝待補人員</span></div>
     <div id="week"></div>
@@ -149,6 +154,15 @@ body.ro #pubBtn,body.ro #unpubBtn,body.ro #tabs [data-v]:not([data-v=out]),body.
 <div id="login" class="login" hidden><div class="lbox"><h2>小日子派工系統</h2><p>請用 Google 帳號登入。劃假管理員和有授權的人可以使用。</p><div id="gbtn"></div><p id="loginMsg" class="lmsg"></p></div></div>
 <div id="busy" class="busy" hidden><div class="spin"></div></div>
 <div id="toast" class="toast" hidden></div>
+<div id="calDrawer" class="drawer" hidden>
+  <div class="dpanel" role="dialog" aria-label="行事曆案件">
+    <div class="dhead">
+      <div class="dr1"><h3 id="cTitle">行事曆案件</h3><button id="cClose" class="ghost">關閉</button><button id="cAdd" class="pri">加入派工</button></div>
+      <p class="hint" id="cMsg"></p>
+    </div>
+    <div id="cList"></div>
+  </div>
+</div>
 <div id="drawer" class="drawer" hidden>
   <div class="dpanel" role="dialog" aria-label="事件">
     <div class="dhead">
@@ -170,7 +184,7 @@ const CONFIG={
   CLIENT_ID:'780487399205-t8rnesc1nh8d3f58vdtglslai5ui6l0t.apps.googleusercontent.com',
   CENTERS_URL:'https://docs.google.com/spreadsheets/d/1WlFSbmEnhAK2oJUXt3w_SHfehW-aCqxwask-sJPT0O0/edit'
 };
-const VERSION='1.4.1';
+const VERSION='1.5.0';
 const WD='日一二三四五六';
 const pad=n=>String(n).padStart(2,'0');
 const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
@@ -233,7 +247,7 @@ async function start(){
   try{
     const me=await api('ping');
     AUTH.me=me;AUTH.role=me.role||'edit';
-    if(me.leaveAdmin===false){$('toLeave').href='index.html';$('toLeave').textContent='劃假系統 ↗';$('toPerm').parentElement.innerHTML='劃假管理員自動可以編輯派工；派工權限由劃假管理員在劃假後台設定。'}// 舊版後端沒有 role，只有管理員能登入
+    if(me.leaveAdmin===false){$('toLeave').href='index.html';$('toLeave').textContent='劃假系統 ↗';{const tp=$('toPerm');if(tp)tp.parentElement.innerHTML='劃假管理員自動可以編輯派工；派工權限由劃假管理員在劃假後台設定。'}}// 舊版後端沒有 role，只有管理員能登入
     if(RO()){document.body.classList.add('ro');view='out';curW=mondayOf(ymd(new Date()));
       for(const x of $('tabs').children)x.classList.toggle('on',x.dataset.v==='out');$('tabs').querySelector('[data-v=out]').textContent='班表';
       for(const v of document.querySelectorAll('.view'))v.hidden=v.id!=='v-out';$('oMsg').textContent='紅字為業務，綠字(助)為攝影助理。只看得到已公布的週。'}$('login').hidden=true;$('who').textContent=(me.name||me.email||'已登入');$('logout').hidden=false;
@@ -761,6 +775,72 @@ $('impNov').onclick=()=>arm($('impNov'),'再按一次確認匯入','匯入 11 �
     toast('已匯入 '+take.length+' 天、'+n+' 筆'+(skip.size?'（'+skip.size+' 天已有資料，略過）':''));
   }catch(e){handleErr(e)}finally{busy(false)}
 });
+/* ---------- 抓行事曆案件 ---------- */
+const CAL_ALIAS={'桃禾':'桃園禾馨','禾馨桃園':'桃園禾馨','茵格':'茵格麗德','宜蘭麗晶':'麗館','尚順頭份館':'尚順','頭份尚順':'尚順','永和尚順':'尚順二館','尚順永和館':'尚順二館','薇閣薇恩':'薇閣','宥幼':'宥宥婦幼','安和':'安和禾馨','台北門市':'台北棚','中壢門市':'中壢棚','竹北門市':'竹北棚','台中門市':'台中棚','昀蔓':'旳蔓'};
+const CAL_KW=[[/新生兒/,'新生兒'],[/孕/,'孕婦'],[/全體|全家福/,'全家福'],[/抓周|生日成長/,'抓周'],[/收涎|百天/,'百天收涎'],[/證件/,'證件照'],[/形象/,'形象照'],[/課程|媽媽教室|爬行|講座|活動/,'活動'],[/商拍|空間|月子餐/,'其他']];
+let CAL=[];
+function parseCal(c){
+  let t=String(c.title||'').trim(),m,flag='';const notes=[];
+  while((m=t.match(/^[（(]([^）)]*)[）)]\s*/))){if(/取消|改|延|暫停|不拍/.test(m[1]))flag=m[1];else notes.push(m[1]);t=t.slice(m[0].length)}
+  const seg=t.split(/[-－]/).map(s=>s.trim()).filter(Boolean),first=seg[0]||'';
+  const known=n=>S.centers.includes(n)||S.studios.includes(n);
+  let loc='',body=t;
+  if(/到府$/.test(first)){loc='客戶家・'+first.replace(/到府$/,'');body=seg.slice(1).join('-')}
+  else if(known(first)||CAL_ALIAS[first]){loc=CAL_ALIAS[first]||first;body=seg.slice(1).join('-')}
+  else{const hit=[...S.centers,...S.studios,...Object.keys(CAL_ALIAS)].filter(n=>first.startsWith(n)).sort((a,b)=>b.length-a.length)[0];
+    if(hit){loc=CAL_ALIAS[hit]||hit;body=[first.slice(hit.length),...seg.slice(1)].filter(Boolean).join('-')}else loc=c.loc||''}
+  for(const q of body.matchAll(/[（(]([^）)]{2,30})[）)]/g))if(!/^[A-Za-z]/.test(q[1]))notes.push(q[1].replace(/‼️/g,'').trim());
+  const biz=(body.match(/安撫娃娃|安撫巾|口水巾|圍兜兜?|奶嘴[鍊鏈練]?/)||[''])[0];
+  const isPick=/挑片/.test(body)||!!biz;
+  let kind='';for(const[r,k]of CAL_KW)if(r.test(body)){kind=k;break}
+  let st='';
+  if((m=body.match(/(\d{1,2}):(\d{2})/)))st=pad(+m[1])+':'+m[2];
+  else if((m=body.match(/(?:^|\D)(\d{3,4})(?!\d)/))&&+m[1].slice(0,-2)>=7&&+m[1].slice(0,-2)<=21&&+m[1].slice(-2)<60)st=pad(+m[1].slice(0,-2))+':'+m[1].slice(-2);
+  else if((m=body.match(/(?:挑片|^|\D)(\d{1,2})(?:化|挑|點|$|[^\d:])/))&&+m[1]>=7&&+m[1]<=21)st=pad(+m[1])+':00';
+  if(!st&&c.start)st=c.start;
+  const names=S.staff.filter(p=>p.name.length>=2&&body.includes(p.name));
+  const e=ev({type:isPick?'pick':'shoot',kind:kind||(isPick?'新生兒':'其他'),loc,allDay:!st,start:st,end:'',pickMode:'none',note:notes.join('、'),cal:c.uid});
+  if(!isPick){for(const p of names){const f=p.role==='攝影師'?'ph':p.role==='安撫師'?'as':p.role==='攝影助理'?'asst':'';if(f&&!e[f])e[f]=p.name}
+    if(!kind&&loc&&S.centers.includes(loc))e.kind='新生兒';
+    if(e.kind==='其他'&&kind)e.title=(body.split(/[-－]/)[0]||'').replace(/\d{1,2}:\d{2}|\d{3,4}/g,'').trim().slice(0,20)}
+  else{const s=names.find(p=>p.role==='業務')||names[0];if(s)e.sales=s.name;if(biz)e.title=biz}
+  let skip='';
+  if(flag)skip=flag;else if(c.multi)skip='跨多天，不像拍攝';else if(!loc&&!kind&&!isPick)skip='不像拍攝行程';
+  const dupCal=Object.values(S.days).some(L=>L.some(x=>x.cal===c.uid));
+  const dupLoc=!dupCal&&loc&&(S.days[c.date]||[]).some(x=>x.loc===loc&&x.type===e.type&&(!st||!x.start||x.start===st));
+  return {c,e,skip,dupCal,dupLoc,on:!skip&&!dupCal&&!dupLoc};
+}
+function renderCalList(){
+  const L=CAL;let h='',last='';
+  if(!L.length)h='<p class="hint">這週行事曆上沒有案件。</p>';
+  L.forEach((x,i)=>{
+    if(x.c.date!==last){last=x.c.date;h+='<div class="cday">'+md(last)+'（'+wdOf(last)+'）</div>'}
+    const e=x.e,who=e.type==='pick'?(e.sales||''):[e.ph,e.as,e.asst].filter(Boolean).join('/');
+    const tag=x.dupCal?'<span class="ct">已加入</span>':x.dupLoc?'<span class="ct">這天已有同地點</span>':x.skip?'<span class="ct hot">'+esc(x.skip)+'</span>':'';
+    h+='<label class="crow'+(x.dupCal?' off':'')+'"><input type="checkbox" data-i="'+i+'"'+(x.on?' checked':'')+(x.dupCal?' disabled':'')+'><div class="cm"><div class="cs">'+(e.type==='pick'?'挑片 ':'拍攝 ')+esc(e.loc||'（地點待填）')+'-'+esc(e.title&&(e.type==='pick'||e.kind==='其他')?e.title:kc(e.kind))+(e.start?' '+e.start:'')+(who?' '+esc(who):'')+tag+'</div><div class="co">'+esc(x.c.cal)+'｜'+esc(x.c.title)+'</div></div></label>';
+  });
+  $('cList').innerHTML=h;updCalBtn();
+}
+function updCalBtn(){const n=CAL.filter(x=>x.on).length;$('cAdd').textContent='加入派工（'+n+'）';$('cAdd').disabled=!n}
+$('cList').addEventListener('change',e=>{const i=e.target.dataset.i;if(i==null)return;CAL[+i].on=e.target.checked;updCalBtn()});
+$('calW').onclick=async()=>{
+  if(RO())return;const from=curW,to=add(curW,6);
+  $('cTitle').textContent='行事曆案件';$('cMsg').textContent='讀取中…';$('cList').innerHTML='';$('cAdd').disabled=true;$('calDrawer').hidden=false;
+  try{
+    const r=await api('calPull',{from,to});CAL=r.events.slice().sort((a,b)=>(a.date+(a.start||'99')).localeCompare(b.date+(b.start||'99'))).map(parseCal);
+    $('cMsg').textContent=md(from)+'–'+md(to)+'：已勾選看起來是拍攝、還沒加入派工的案件，確認後按「加入派工」。只讀行事曆標題，不讀說明欄。'+(r.errors.length?' ⚠ 讀不到：'+r.errors.map(x=>x.name).join('、'):'');
+    renderCalList();
+  }catch(e){$('cMsg').textContent=e.code==='BAD'&&/不認得/.test(e.message)?'後端還沒更新到 v1.5.0，請先更新 Apps Script。':e.message;if(e.code==='AUTH')handleErr(e)}
+};
+$('cClose').onclick=()=>{$('calDrawer').hidden=true};
+$('calDrawer').addEventListener('click',e=>{if(e.target.id==='calDrawer')$('calDrawer').hidden=true});
+$('cAdd').onclick=()=>{
+  const pick=CAL.filter(x=>x.on);if(!pick.length)return;
+  const full=clone(S.days);
+  for(const x of pick)day(x.c.date).unshift(x.e);
+  pushUndo({full,label:'抓行事曆'});lastLabel='抓行事曆案件';save();refresh();
+  $('calDrawer').hidden=true;toast('已加入 '+pick.length+' 筆行事曆案件，可按「↶ 復原」');
+};
 $('logout').onclick=()=>{if(dirtyDays().length){toast('還有修改正在儲存，請稍候再登出',true);return}logout('')};
 const arm=(b,txt,orig,fn)=>{if(!b.classList.contains('armed')){b.classList.add('armed');b.textContent=txt;setTimeout(()=>{b.classList.remove('armed');b.textContent=orig},4000);return}b.classList.remove('armed');b.textContent=orig;fn()};
 
