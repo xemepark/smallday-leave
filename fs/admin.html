@@ -276,7 +276,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s .8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
-<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128p';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128q';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 <div class="wrap">
@@ -603,7 +603,7 @@ async function applyHash(){
   if (h === 'settings' && state.data) openSettings();
   if (h === 'admins' && state.data) openAdmins();
   if (h === 'rules' && state.data) openRules();
-  if (h === 'dperm') openDperm();
+  if (h === 'dperm') location.replace('../admin.html#dperm');
   renderMenu(h);
 }
 window.addEventListener('hashchange', () => { if (state.me) applyHash(); });
@@ -617,7 +617,7 @@ const NAV = [
   { id: 'rules',    label: '職務名額', href: 'admin.html#rules',    show: me => me.admin },
   { id: 'settings', label: '系統設定', href: 'admin.html#settings', show: me => me.admin },
   { id: 'admins',   label: '管理員',   href: 'admin.html#admins',   show: me => me.owner },
-  { id: 'dperm',    label: '派工權限', href: 'admin.html#dperm',    show: me => me.admin },
+  { id: 'dperm',    label: '派工權限', href: '../admin.html#dperm', show: me => me.admin },   // 派工系統還是用 Google 登入，先用舊版後台設定
   { id: 'schedule', label: '班表',     href: '../dispatch.html',       show: me => !me.admin && !!me.dispatchRole }
 ];
 // 不是管理員的人，問派工系統有沒有開放看班表；有的話選單多一個「班表」
@@ -1439,7 +1439,7 @@ async function openDperm(){
   $('#dEmail').value = ''; $('#dList').innerHTML = '<li>載入中…</li>';
   $('#backdrop').classList.add('show'); $('#dpermPanel').classList.add('show');
   try { state.dperm = await dapi('perms'); fillDperm(); }
-  catch(e){ $('#dList').innerHTML = ''; $('#dList').appendChild(el('li', '', e.message)); if (e.code === 'AUTH') handleError(e); }
+  catch(e){ $('#dList').innerHTML = ''; $('#dList').appendChild(el('li', '', e.code === 'AUTH' ? '派工系統還不認得這個版本的登入，請從選單的「派工權限」到舊版後台設定' : e.message)); }
 }
 function fillDperm(){
   const d = state.dperm, ul = $('#dList'); ul.textContent = '';
@@ -1466,7 +1466,7 @@ async function saveDperm(list, everyone){
   if (state.busy) return;
   setBusy(true);
   try { state.dperm = await dapi('setPerms', { list, everyone }); $('#dEmail').value = ''; fillDperm(); toast('已更新派工權限'); }
-  catch(e){ toast(e.message, true); if (state.dperm) fillDperm(); if (e.code === 'AUTH') handleError(e); }
+  catch(e){ toast(e.message, true); if (state.dperm) fillDperm(); }
   finally { setBusy(false); }
 }
 
