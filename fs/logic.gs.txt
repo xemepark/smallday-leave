@@ -9,7 +9,7 @@
  *           所以只能劃自己的假，不能代填。
  */
 
-const VERSION = '2.7.1';
+const VERSION = '2.8.0';
 const TZ = 'Asia/Taipei';
 const SH = {
   SETTINGS: '設定',
@@ -479,6 +479,24 @@ function adminSubmitFor_(admin, req) {
 
 /* ============================== 名額計算 ============================== */
 
+/** 名額分兩區：台中自己一區，其他門市＝北部（合算） */
+const SOUTH_STORES_ = ['台中'];
+function regionOf_(store) { return SOUTH_STORES_.indexOf(store) >= 0 ? '台中' : '北部'; }
+function isRegion_(x) { return x === '北部' || x === '台中'; }
+function regionsOf_(stores) {
+  const out = [];
+  if ((stores || []).some(st => regionOf_(st) === '北部')) out.push('北部');
+  if ((stores || []).some(st => regionOf_(st) === '台中')) out.push('台中');
+  return out;
+}
+function regionStores_(stores, region) { return (stores || []).filter(st => regionOf_(st) === region); }
+/** 這組門市剛好是某一區的全部門市 → 回傳區名 */
+function regionName_(stores, all) {
+  const set = (stores || []).slice().sort().join(',');
+  const hit = regionsOf_(all).find(r => regionStores_(all, r).slice().sort().join(',') === set);
+  return hit || '';
+}
+
 /** 某人某天的名額狀況：名額、已用、誰休、備註 */
 function slot_(ctx, who, date) {
   const dt = dayType_(date);
@@ -500,15 +518,22 @@ function slot_(ctx, who, date) {
   let quota = rule ? rule.quota : null;
   let scope = who.store;
   let inPool = b => b.store === who.store;
+  const allStores = (ctx.settings && ctx.settings.stores) || [];
   if (rule && rule.scope === '合計') {
     inPool = b => !rule.stores.length || rule.stores.indexOf(b.store) >= 0;
-    scope = rule.stores.length ? rule.stores.join('、') + ' 合計' : '全公司合計';
+    const rn = rule.stores.length ? regionName_(rule.stores, allStores) : '';
+    scope = rule.stores.length ? (rn ? rn + '合計' : rule.stores.join('、') + ' 合計') : '全公司合計';
   }
   if (ov) {
     quota = ov.quota;
-    if (ov.store) {
+    if (ov.store && isRegion_(ov.store) && SOUTH_STORES_.indexOf(ov.store) < 0) {
+      // 整區的特別設定（例如北部）：這一區合算
+      const rs = regionStores_(allStores, ov.store);
+      inPool = b => rs.indexOf(b.store) >= 0;
+      scope = ov.store + '合計';
+    } else if (ov.store) {
       inPool = b => b.store === who.store;
-      scope = who.store;
+      scope = SOUTH_STORES_.indexOf(who.store) >= 0 && regionName_([who.store], allStores) ? who.store + '合計' : who.store;
     }
   }
 
@@ -593,7 +618,7 @@ function pickOverride_(overrides, date, who) {
   const list = overrides.filter(o =>
     o.date === date &&
     (!o.role || o.role === who.role) &&
-    (!o.store || o.store === who.store));
+    (!o.store || o.store === who.store || (isRegion_(o.store) && regionOf_(who.store) === o.store)));
   list.sort((a, b) => score(b) - score(a));
   return list[0] || null;
   function score(o) { return (o.role ? 2 : 0) + (o.store ? 1 : 0); }
@@ -768,11 +793,14 @@ function adminView_(admin, month) {
   const ctx = readContext_(month);
   const roles = roleList_(ctx.rules);
   const days = monthDays_(month);
+  // 名額表只分「北部、台中」兩區：每區用一間代表門市算（同一區的名額合算）
+  const regions = regionsOf_(s.stores);
   const grid = {};
-  s.stores.forEach(store => {
-    grid[store] = {};
+  regions.forEach(region => {
+    const store = regionStores_(s.stores, region)[0];
+    grid[region] = {};
     roles.forEach(role => {
-      grid[store][role] = days.map(date => {
+      grid[region][role] = days.map(date => {
         const sl = slot_(ctx, { role: role, store: store }, date);
         return {
           quota: sl.quota,
@@ -803,7 +831,9 @@ function adminView_(admin, month) {
     },
     days: days.map(d => dayInfo_(ctx, d)),
     roles: roles,
-    stores: s.stores,
+    stores: regions,
+    regionStores: regions.reduce((o, r) => { o[r] = regionStores_(s.stores, r); return o; }, {}),
+    allStores: s.stores,
     grid: grid,
     serverTime: nowStr_()
   };
