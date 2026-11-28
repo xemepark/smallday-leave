@@ -55,8 +55,13 @@ service cloud.firestore {
     // 同仁可以自己動的假：自排、許願、事假／病假／特休申請
     function staffType(t) { return t in ['自排', '許願', '事假申請', '病假申請', '特休申請']; }
     // 自排、許願要照劃假順序：輪到自己、而且還沒送出
+    // 這個職務有啟用「全公司」順序就照全公司，不然照自己門市
+    function grp(b, st) {
+      let cg = st.role + '|全公司';
+      return (cg in b.get('turn', {})) ? cg : st.role + '|' + st.store;
+    }
     function turnOk(t, b, me, st) {
-      let g = st.role + '|' + st.store;
+      let g = grp(b, st);
       let turn = b.get('turn', {});
       return !(t == '自排' || t == '許願')
         || (!(me in b.get('sub', {})) && (!(g in turn) || turn[g] == me));
@@ -66,9 +71,9 @@ service cloud.firestore {
       let c = cfg();
       let me = email();
       let st = c.staffMap[me];
-      let g = st.role + '|' + st.store;
-      let a = request.resource.data;
       let b = resource.data;
+      let g = grp(b, st);
+      let a = request.resource.data;
       let bs = b.get('sub', {});
       let as = a.get('sub', {});
       let bt = b.get('turn', {});

@@ -9,7 +9,7 @@
  *           所以只能劃自己的假，不能代填。
  */
 
-const VERSION = '2.5.2';
+const VERSION = '2.6.0';
 const TZ = 'Asia/Taipei';
 const SH = {
   SETTINGS: '設定',
@@ -301,9 +301,16 @@ function getSubmits_(month) {
   });
   return out;
 }
-/** 某一組的完整順序：管理員排的在前，其他同組同仁照人員表順序接在後面 */
+const ALL_STORES_ = '全公司';
+/** 同仁照哪一條順序：這個職務有啟用「全公司」順序就照全公司，不然照自己門市 */
+function myGroup_(me, orders) {
+  const cg = me.role + '|' + ALL_STORES_;
+  return orders[cg] ? cg : me.role + '|' + me.store;
+}
+/** 某一組的完整順序：管理員排的在前，其他同組同仁照人員表順序接在後面（門市＝全公司：所有門市同職務） */
 function groupOrder_(g, orders, staff) {
-  const members = staff.filter(p => p.email && p.role + '|' + p.store === g).map(p => normEmail_(p.email));
+  const role = g.split('|')[0], store = g.split('|')[1];
+  const members = staff.filter(p => p.email && p.role === role && (store === ALL_STORES_ ? !!p.store : p.store === store)).map(p => normEmail_(p.email));
   const head = (orders[g] || []).filter(e => members.indexOf(e) >= 0);
   return head.concat(members.filter(e => head.indexOf(e) < 0));
 }
@@ -326,7 +333,7 @@ function assertMyTurn_(me, month) {
   const subs = getSubmits_(month);
   if (subs[me.email]) fail_('你 ' + Number(month.slice(5)) + ' 月已經送出了，要修改請洽主管', 'SUBMITTED');
   const orders = getOrders_(month);
-  const g = me.role + '|' + me.store;
+  const g = myGroup_(me, orders);
   if (!orders[g]) return;
   const list = groupOrder_(g, orders, getStaff_());
   const t = list.find(e => !subs[e]) || '';
@@ -338,13 +345,14 @@ function assertMyTurn_(me, month) {
 function turnView_(me, month) {
   const subs = getSubmits_(month);
   const orders = getOrders_(month);
-  const g = me.role + '|' + me.store;
-  const out = { active: !!orders[g], submitted: !!subs[me.email], submittedAt: subs[me.email] ? subs[me.email].at : '' };
+  const g = myGroup_(me, orders);
+  const all = g.split('|')[1] === ALL_STORES_;
+  const out = { active: !!orders[g], scope: all ? ALL_STORES_ + me.role : me.store + me.role, submitted: !!subs[me.email], submittedAt: subs[me.email] ? subs[me.email].at : '' };
   if (!orders[g]) return out;
   const staff = getStaff_();
   const list = groupOrder_(g, orders, staff);
   const t = list.find(e => !subs[e]) || '';
-  const nameOf = e => { const p = staff.find(x => normEmail_(x.email) === e); return p ? p.name : e; };
+  const nameOf = e => { const p = staff.find(x => normEmail_(x.email) === e); return p ? p.name + (all && p.store ? '（' + p.store + '）' : '') : e; };
   out.myIndex = list.indexOf(me.email) + 1;
   out.total = list.length;
   out.isMyTurn = t === me.email;
@@ -893,11 +901,12 @@ function rosterOrders_(month, staff) {
   const orders = getOrders_(month), subs = getSubmits_(month);
   const out = {};
   const groups = {};
-  staff.forEach(p => { if (p.email && p.role && p.store) groups[p.role + '|' + p.store] = 1; });
+  staff.forEach(p => { if (p.email && p.role && p.store) { groups[p.role + '|' + ALL_STORES_] = 1; groups[p.role + '|' + p.store] = 1; } });
   Object.keys(groups).forEach(g => {
     const list = groupOrder_(g, orders, staff);
     const t = orders[g] ? (list.find(e => !subs[e]) || '') : '';
-    out[g] = { active: !!orders[g], list: list, turn: t };
+    const all = g.split('|')[1] === ALL_STORES_;
+    out[g] = { active: !!orders[g], list: list, turn: t, all: all, overridden: !all && !!orders[g.split('|')[0] + '|' + ALL_STORES_] };
   });
   return out;
 }

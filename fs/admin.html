@@ -103,7 +103,7 @@
   .chips{display:flex;gap:6px;flex-wrap:wrap}
   .chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 14px;cursor:pointer;font:inherit;color:var(--ink)}
   .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
-  .tag{font-size:12px;color:var(--sub)}
+  .tag{font-size:12px;color:var(--sub)} .tag.warn{color:#9a5b00;background:#fff6d1;border-radius:8px;padding:6px 8px;margin:4px 0}
   .modebar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:12px}
   .mstate{display:flex;align-items:center;gap:8px;font-size:14px}
   .mstate i{width:10px;height:10px;border-radius:50%;background:var(--sub);flex:none}
@@ -268,7 +268,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s .8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
-<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128d';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128e';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 <div class="wrap">
@@ -696,15 +696,16 @@ function renderOrder(r){
   const box = $('#orderIn'); box.textContent = '';
   const groups = Object.keys(r.orders || {}).sort((a, b) => {
     const [ra, sa] = a.split('|'), [rb, sb] = b.split('|');
-    const ri = x => { const i = (r.roles || []).indexOf(x); return i < 0 ? 99 : i; }, si = x => { const i = (r.stores || []).indexOf(x); return i < 0 ? 99 : i; };
+    const ri = x => { const i = (r.roles || []).indexOf(x); return i < 0 ? 99 : i; }, si = x => { if (x === '全公司') return -1; const i = (r.stores || []).indexOf(x); return i < 0 ? 99 : i; };
     return ri(ra) - ri(rb) || si(sa) - si(sb);
   });
   if (!groups.length){ box.appendChild(el('div', 'tag', '目前沒有可以排順序的同仁（要有 Gmail、職務、門市）')); return; }
   if (!state.oGroup || groups.indexOf(state.oGroup) < 0) state.oGroup = groups[0];
-  const nameOf = e => { const p = r.people.find(x => x.key === e); return p ? p.name : e; };
+  const og0 = r.orders[state.oGroup];
+  const nameOf = e => { const p = r.people.find(x => x.key === e); return p ? p.name + (og0.all && p.store ? '（' + p.store + '）' : '') : e; };
   const bar = el('div', 'ordbar');
   const sel = el('select');
-  groups.forEach(g => { const o = el('option', '', g.split('|')[1] + ' ' + g.split('|')[0] + (r.orders[g].active ? '（照順序）' : '')); o.value = g; sel.appendChild(o); });
+  groups.forEach(g => { const o = el('option', '', g.split('|')[1] + ' ' + g.split('|')[0] + (r.orders[g].active ? '（照順序）' : r.orders[g].overridden ? '（照全公司）' : '')); o.value = g; sel.appendChild(o); });
   sel.value = state.oGroup;
   sel.onchange = () => { state.oGroup = sel.value; state.oDraft = null; renderOrder(r); };
   bar.appendChild(sel);
@@ -716,6 +717,8 @@ function renderOrder(r){
   bar.appendChild(save);
   if (og.active){ const off = el('button', '', '取消順序（大家都能劃）'); off.onclick = () => orderAct({ emails: null }); bar.appendChild(off); }
   box.appendChild(bar);
+  if (og.overridden) box.appendChild(el('div', 'tag warn', '這個職務已經啟用「全公司」順序，同仁會照全公司那條輪；這裡的門市順序先不管，取消全公司順序後才會恢復。'));
+  else if (og.all && !og.active) box.appendChild(el('div', 'tag', '全公司順序：所有門市的這個職務排成一條，一次只有一個人能劃。啟用後，各門市的順序先暫停。'));
   box.appendChild(el('div', 'tag', og.active ? '輪到的人按「送出」後才換下一位；卡住的話可以按「代送出」。' : '還沒啟用：這組同仁現在不用排隊。用 ↑↓ 排好順序後按「啟用」。'));
   const ol = el('ul', 'ol');
   const subs = r.submits || {};
@@ -1609,7 +1612,7 @@ document.querySelectorAll('input[name=dmode]').forEach(r => r.onchange = syncDay
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js?v=1.0.0"></script>
 <script src="engine-core.js?v=1.2.0"></script>
-<script src="engine.js?v=1.2.1"></script>
+<script src="engine.js?v=1.2.2"></script>
 <script>onGsiLoad();</script>
 </body>
 </html>

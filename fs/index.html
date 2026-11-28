@@ -151,7 +151,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--leave);border-radius:50%;animation:s 0.8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
-<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128d';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128e';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 
@@ -624,7 +624,7 @@ function renderTurn(d){
   box.classList.remove('hidden');
   if (tv.submitted){ box.className = 'turnbox done'; box.textContent = '你 ' + Number(d.month.slice(5)) + ' 月的排休已經送出' + (tv.submittedAt ? '（' + tv.submittedAt + '）' : '') + '，要修改請洽主管'; return; }
   if (tv.isMyTurn){ box.className = 'turnbox go'; box.textContent = '輪到你劃假了！自排、許願排好後，按最下面的「送出」換下一位'; }
-  else { box.className = 'turnbox'; box.textContent = '目前輪到 ' + tv.turnName + ' 劃假，你排第 ' + tv.myIndex + ' 位（共 ' + tv.total + ' 位）。輪到你之前可以先看名額；事假／病假／特休隨時可以申請'; }
+  else { box.className = 'turnbox'; box.textContent = '目前輪到 ' + tv.turnName + ' 劃假，你在' + (tv.scope ? '「' + tv.scope + '」' : '') + '排第 ' + tv.myIndex + ' 位（共 ' + tv.total + ' 位）。輪到你之前可以先看名額；事假／病假／特休隨時可以申請'; }
   const ol = el('ol');
   (tv.list || []).forEach(p => ol.appendChild(el('li', (p.turn ? 'turn' : '') + (p.me ? ' me' : ''), p.name + (p.submitted ? '　✓ 已送出' : p.turn ? '　← 劃假中' : ''))));
   box.appendChild(ol);
@@ -706,7 +706,7 @@ $('#onlyMine').addEventListener('change', () => { if (state.data) renderList(sta
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js?v=1.0.0"></script>
 <script src="engine-core.js?v=1.2.0"></script>
-<script src="engine.js?v=1.2.1"></script>
+<script src="engine.js?v=1.2.2"></script>
 <script>onGsiLoad();</script>
 </body>
 </html>

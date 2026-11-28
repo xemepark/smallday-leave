@@ -13,7 +13,7 @@
 (function () {
   'use strict';
   const C = window.LeaveCore;
-  const FS_VERSION = '1.2.1';
+  const FS_VERSION = '1.2.2';
   const OWNER = 'xemepark@gmail.com';
   const BOOK_HEADER = ['日期', 'Email', '姓名', '職位', '門市', '類型', '建立時間', '建立者'];
   const LOG_HEADER = ['時間', 'Email', '姓名', '動作', '內容'];
@@ -186,7 +186,8 @@
           const me = authEmail();
           const meta = monthMeta(m);
           const st = (cfg.staffMap || {})[me] || {};
-          const g = st.role + '|' + st.store;
+          const cg = st.role + '|全公司';
+          const g = (cg in (doc.turn || {})) ? cg : st.role + '|' + st.store;
           delete next.b; next.b = doc.b;
           next.sub = Object.assign({}, doc.sub || {}, { [me]: meta.sub[me] || { a: '', b: me } });
           next.turn = Object.assign({}, doc.turn || {});
