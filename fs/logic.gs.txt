@@ -9,7 +9,7 @@
  *           所以只能劃自己的假，不能代填。
  */
 
-const VERSION = '2.6.2';
+const VERSION = '2.6.3';
 const TZ = 'Asia/Taipei';
 const SH = {
   SETTINGS: '設定',
@@ -1786,6 +1786,7 @@ function fsPush_(withBookings, by) {
       const list = (s.months || []).concat(Object.keys(byId), Object.keys(sheetB)).filter((m, i, a) => m && a.indexOf(m) === i).sort();
       const pub = Date.now();
       const cfg = Object.assign({ tables: tables, staffSrc: JSON.stringify(staffSrcRows_(s)), pub: pub, fsVersion: FS_VERSION_ }, fsDerived_(s));
+      if (cur.data.testMode) cfg.testMode = true;   // 測試／上線模式只有系統擁有者在後台切換，同步不要蓋掉
       const writes = [fsUpdate_('cfg/main', cfg)];
       list.forEach(m => {
         const src = withBookings ? (sheetB[m] || {}) : ((byId[m] && byId[m].data.b) || {});

@@ -16,10 +16,12 @@ service cloud.firestore {
     }
     function isMember() { return isAdmin() || isStaff(); }
 
-    // 設定：大家都能讀，只有管理員能改
+    // 設定：大家都能讀，只有管理員能改；測試／上線模式只有系統擁有者能切換
     match /cfg/{id} {
       allow read: if isMember();
-      allow write: if isAdmin();
+      allow create, delete: if isOwner();
+      allow update: if isOwner()
+        || (isAdmin() && request.resource.data.get('testMode', false) == resource.data.get('testMode', false));
     }
 
     // 每個月的排休

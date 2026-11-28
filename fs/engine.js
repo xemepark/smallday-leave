@@ -13,7 +13,7 @@
 (function () {
   'use strict';
   const C = window.LeaveCore;
-  const FS_VERSION = '1.2.3';
+  const FS_VERSION = '1.3.0';
   const OWNER = 'xemepark@gmail.com';
   const BOOK_HEADER = ['日期', 'Email', '姓名', '職位', '門市', '類型', '建立時間', '建立者'];
   const LOG_HEADER = ['時間', 'Email', '姓名', '動作', '內容'];
@@ -41,7 +41,18 @@
     listen();
   }
 
-  const authEmail = () => (auth.currentUser && auth.currentUser.email ? auth.currentUser.email.toLowerCase() : '');
+  const realEmail = () => (auth.currentUser && auth.currentUser.email ? auth.currentUser.email.toLowerCase() : '');
+  /* ---------- 測試模式：管理員用某位同仁的身分操作（只有同仁頁面、只在測試模式） ---------- */
+  const AS_KEY = 'fsActAs';
+  const isRealAdmin = () => { const em = realEmail(); return !!em && (em === OWNER || !!(cfg && (cfg.admins || []).indexOf(em) >= 0)); };
+  function actAs() {
+    if (!window.FS_ALLOW_ACT_AS || !cfg || !cfg.testMode || !isRealAdmin()) return '';
+    let as = '';
+    try { as = sessionStorage.getItem(AS_KEY) || ''; } catch (e) {}
+    return as && (cfg.staffMap || {})[as] ? as : '';
+  }
+  // 系統裡「我是誰」：測試模式模擬同仁時是那位同仁，其他時候是登入的帳號
+  const authEmail = () => actAs() || realEmail();
 
   /* ---------- 把 Firestore 的資料放進記憶體裡的「試算表」 ---------- */
   function rebuildSheets() {
@@ -134,9 +145,11 @@
     const sh = G.sheets[C.LOG];
     const rows = sh.data.slice(from);
     sh.data = [LOG_HEADER];
-    const email = authEmail();
+    const email = realEmail();
+    const as = actAs();
     rows.forEach(r => {
-      db.collection('logs').add({ at: String(r[0] || ''), email, name: String(r[2] || ''), action: String(r[3] || ''), detail: String(r[4] || ''),
+      db.collection('logs').add({ at: String(r[0] || ''), email, name: String(r[2] || ''), action: String(r[3] || ''),
+        detail: (as ? '［測試模式：' + email + ' 模擬］' : '') + String(r[4] || ''),
         ts: firebase.firestore.FieldValue.serverTimestamp() }).catch(() => {});
     });
   }
@@ -291,13 +304,22 @@
   /** 管理員打開後台時：開放中的月份如果還沒有名額表，就自動建立 */
   async function ensurePublished() {
     if (!cfg) return;
-    const em = authEmail();
-    if (em !== OWNER && (cfg.admins || []).indexOf(em) < 0) return;
+    if (!isRealAdmin() || actAs()) return;
     const d = derivedCfg();
     const need = monthsToPublish(d.window).filter(m => !months[m] || !months[m].pm || (months[m].pub || 0) < (cfg.pub || 0));
     const winChanged = JSON.stringify(d.window) !== JSON.stringify(cfg.window || {});
     if (!need.length && !winChanged) return;
     try { await saveAll(); } catch (e) {}
+  }
+
+  /** 系統擁有者切換測試／上線模式 */
+  async function setTestMode(on) {
+    if (realEmail() !== OWNER) return err('只有系統擁有者可以切換測試／上線模式', 'NOT_OWNER');
+    try { await db.doc('cfg/main').update({ testMode: on }); } catch (e) { return err('切換失敗，請檢查網路後再試', 'NETWORK'); }
+    if (cfg) cfg.testMode = on;
+    db.collection('logs').add({ at: C.fmtDate(new Date(), '', 'yyyy-MM-dd HH:mm:ss'), email: realEmail(), name: '系統擁有者', action: on ? '切換成測試模式' : '切換成上線模式', detail: '',
+      ts: firebase.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+    return { ok: true, message: on ? '已切換成測試模式：管理員可以模擬同仁' : '已切換成上線模式' };
   }
 
   /* ---------- 攔下網頁送到 Apps Script 的請求 ---------- */
@@ -306,10 +328,16 @@
     if (!auth.currentUser) return err('請先登入', 'AUTH');
     await ready;
     if (readyErr) { restart(); await ready; }   // 失敗就重讀一次（例如剛登入、權杖還沒生效）
-    if (readyErr && readyErr.code === 'permission-denied') return err('這個帳號（' + authEmail() + '）不在人員名單裡，請洽主管', 'NOT_STAFF');
+    if (readyErr && readyErr.code === 'permission-denied') return err('這個帳號（' + realEmail() + '）不在人員名單裡，請洽主管', 'NOT_STAFF');
     if (!cfg) return err('Firestore 版還沒匯入資料，請洽系統擁有者', 'SETUP');
     const a = body.action;
-    if (a === 'fsSync') return syncWithSheet(body.op);
+    if (a === 'fsSetTestMode') return setTestMode(!!body.on);
+    const as = actAs();
+    if (as) {
+      if (a && a.indexOf('admin') === 0) return err('測試模式模擬同仁中，不能做管理員的動作', 'NOT_ADMIN');
+      body.idToken = fakeToken(as);
+    }
+    if (a === 'fsSync') return as ? err('模擬同仁中不能同步', 'NOT_ADMIN') : syncWithSheet(body.op);
     if (a === 'adminLoad' || a === 'adminRoster') ensurePublished();
     if (READ.indexOf(a) >= 0) return run(body);
     if (TX.indexOf(a) >= 0) return txWrite(body);
@@ -328,7 +356,10 @@
     if (!opt || !opt.body) {
       out = { ok: true, version: (G && G.VERSION ? G.VERSION : '') + '（Firestore 版 ' + FS_VERSION + '）' };
     } else {
-      try { out = await handle(JSON.parse(opt.body)); }
+      try {
+        out = await handle(JSON.parse(opt.body));
+        if (out && typeof out === 'object' && cfg && auth.currentUser) out.fs = { test: !!cfg.testMode, admin: isRealAdmin(), owner: realEmail() === OWNER, real: realEmail(), as: actAs() };
+      }
       catch (e) { console.error(e); out = err('系統錯誤：' + (e && e.message ? e.message : e), 'ERROR'); }
     }
     return new Response(JSON.stringify(out), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -361,7 +392,7 @@
       el.appendChild(b);
     },
     prompt() { if (auth.currentUser && cb) cb({ credential: fakeToken(authEmail()) }); },
-    disableAutoSelect() { if (!cfg && authEmail() === OWNER) return; auth.signOut().catch(() => {}); }
+    disableAutoSelect() { try { sessionStorage.removeItem(AS_KEY); } catch (e) {} if (!cfg && realEmail() === OWNER) return; auth.signOut().catch(() => {}); }
   } } };
 
   let lastUid = null;
@@ -379,8 +410,15 @@
   /* 系統擁有者第一次使用：把試算表版匯出的資料匯入 */
   window.LeaveFS = {
     version: FS_VERSION,
+    /** 測試模式：可以模擬的同仁（姓名、門市、職務） */
+    staffList() {
+      const m = (cfg && cfg.staffMap) || {};
+      return Object.keys(m).filter(e => m[e].active).map(e => ({ email: e, name: m[e].name || e, role: m[e].role || '', store: m[e].store || '' }));
+    },
+    actAs(email) { try { if (email) sessionStorage.setItem(AS_KEY, email); else sessionStorage.removeItem(AS_KEY); } catch (e) {} },
+    actingAs() { return actAs(); },
     async importAll(json) {
-      if (authEmail() !== OWNER) throw new Error('只有系統擁有者可以匯入');
+      if (realEmail() !== OWNER) throw new Error('只有系統擁有者可以匯入');
       if (!G) await loadCode();
       const data = typeof json === 'string' ? JSON.parse(json) : json;
       C.TABLES.forEach(name => { G.sheets[name] = C.makeSheet(name, C.unpack(data.tables[name] || [[]])); });
@@ -397,7 +435,7 @@
     },
     /** 只更新人員來源（五欄），其他不動 */
     async importStaff(src) {
-      const em = authEmail();
+      const em = realEmail();
       if (em !== OWNER && (!cfg || (cfg.admins || []).indexOf(em) < 0)) throw new Error('只有管理員可以同步人員');
       cfg = Object.assign({}, cfg, { staffSrc: JSON.stringify(src) });
       rebuildSheets();
