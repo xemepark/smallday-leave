@@ -6,9 +6,10 @@
 (function (root) {
   'use strict';
 
-  const TABLES = ['設定', '人員', '名額規則', '日期覆寫', '公休日', '部門對照', '職稱對照'];
+  const TABLES = ['設定', '人員', '名額規則', '日期覆寫', '公休日', '部門對照', '職稱對照', '劃假順序'];
   const BOOK = '劃假紀錄';
   const LOG = '操作紀錄';
+  const SUBMIT = '送出紀錄';   // 存在每個月份文件的 sub 裡
   const SRC = '__人員來源';
 
   /* ---------- 日期放進 Firestore 前轉成數字，拿出來再轉回日期 ---------- */
@@ -130,7 +131,7 @@
       console: (typeof console !== 'undefined') ? console : { log() {} }
     };
     const exportsList = ['doPost', 'readContext_', 'slot_', 'getSettings_', 'getStaff_', 'loadStaffAll_',
-      'roleList_', 'monthDays_', 'normEmail_', 'normDate_', 'normType_', 'bumpVer_', 'dayType_', 'isControlled_', 'VERSION'];
+      'roleList_', 'monthDays_', 'normEmail_', 'normDate_', 'normType_', 'bumpVer_', 'dayType_', 'isControlled_', 'monthMeta_', 'VERSION'];
     const body = codeText +
       '\nfunction __reset(){ for (const k in MEMO_) delete MEMO_[k]; FRESH_ = true; }' +
       '\nreturn {' + exportsList.map(n => n + ': (typeof ' + n + " !== 'undefined' ? " + n + ' : null)').join(',') + ', __reset };';
@@ -212,6 +213,6 @@
     return Object.keys(set).map(k => set[k]);
   }
 
-  root.LeaveCore = { TABLES, BOOK, LOG, SRC, pack, unpack, makeSheet, makeGas, normDate, normEmail, keyOf,
+  root.LeaveCore = { TABLES, BOOK, LOG, SRC, SUBMIT, pack, unpack, makeSheet, makeGas, normDate, normEmail, keyOf,
     rowToEntry, entryToRow, entriesToRows, poolKey, computePools, countPools, combosFor, fmtDate };
 })(typeof window !== 'undefined' ? window : globalThis);

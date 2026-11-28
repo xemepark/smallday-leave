@@ -71,6 +71,26 @@
   .day.mine-mgr{background:var(--mgr-bg);border-color:var(--mgr)} .day.mine-mgr .t{color:var(--mgr);font-weight:700}
   .day.holiday{background:#eaf3ec;border-color:#4f8a5b} .day.holiday .t{color:#4f8a5b;font-weight:700}
   .day.mine-other{background:var(--other-bg);border-color:var(--other)} .day.mine-other .t{color:var(--other);font-weight:700}
+  .day.mine-wish{background:#fff;border:2px dashed var(--mgr)} .day.mine-wish .t{color:var(--mgr);font-weight:700}
+  .day.mine-apply{background:#fff;border:2px dashed var(--other)} .day.mine-apply .t{color:var(--other);font-weight:700;font-size:11px}
+  .row.mine-wish{border:2px dashed var(--mgr)} .row.mine-wish .b{color:var(--mgr)}
+  .row.mine-apply{border:2px dashed var(--other)} .row.mine-apply .b{color:var(--other)}
+  .turnbox{border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:14px;background:var(--mgr-bg);color:var(--mgr)}
+  .turnbox.go{background:var(--ok-bg);color:var(--ok);font-weight:700}
+  .turnbox.done{background:var(--full-bg);color:var(--sub)}
+  .turnbox ol{margin:6px 0 0;padding-left:22px;font-weight:400;color:var(--sub)}
+  .turnbox ol li.turn{color:var(--ok);font-weight:700} .turnbox ol li.me{text-decoration:underline}
+  .opts{display:flex;gap:6px;margin-top:8px}
+  .opts button{flex:1;border:1.5px solid var(--line);background:var(--card);border-radius:10px;padding:10px 4px;font:inherit;font-size:14px;font-weight:700;cursor:pointer;color:var(--ink)}
+  .opts button.wish{border-color:var(--mgr);color:var(--mgr)}
+  .opts button.kind{color:var(--other);border-color:var(--other)}
+  .opts button.off{background:var(--full-bg);color:var(--sub);border-color:var(--line)}
+  .submitbox{margin:14px 0 6px}
+  .submitbox .streak{background:var(--leave-bg);color:var(--leave);border-radius:10px;padding:8px 10px;font-size:13px;margin-bottom:8px}
+  #alertBox{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.35);z-index:60;padding:20px}
+  #alertBox.show{display:flex}
+  #alertBox .in{background:var(--card);border-radius:16px;padding:18px;max-width:420px;width:100%}
+  #alertBox h3{margin:0 0 8px;font-size:17px} #alertBox p{white-space:pre-line;margin:0 0 14px;font-size:15px;line-height:1.6}
   .day.sel{outline:2px solid var(--ink);outline-offset:1px}
   .blank{visibility:hidden}
 
@@ -131,7 +151,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--leave);border-radius:50%;animation:s 0.8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
-<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261127c';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128a';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 
@@ -158,15 +178,19 @@
     <div class="tabs hidden" id="monthTabs"></div>
 
     <div id="status" class="status"></div>
+    <div id="turnBox" class="turnbox hidden"></div>
 
     <div class="counts">
       <div class="count"><small id="cLeaveLabel">自排</small><b id="cLeave">0</b><span id="cLeaveMax"></span></div>
+      <div class="count" id="cWishBox"><small>許願（主管決定）</small><b id="cWish">0</b><span id="cWishMax"></span></div>
       <div class="count" id="cWeekendBox"><small>週六日自選</small><b id="cWeekend">0</b><span id="cWeekendMax"></span></div>
     </div>
 
     <div class="legend">
       <span><i style="background:var(--leave)"></i>我的排休</span>
       <span><i style="background:var(--mgr-bg);border:1px solid var(--mgr)"></i>公排</span>
+      <span><i style="background:#fff;border:1.5px dashed var(--mgr)"></i>許願</span>
+      <span><i style="background:#fff;border:1.5px dashed var(--other)"></i>請假待審</span>
       <span><i style="background:var(--ok-bg);border:1px solid var(--ok)"></i>還有名額</span>
       <span><i style="background:var(--full-bg)"></i>額滿／禁休</span>
       <span><i style="background:#eaf3ec;border:1px solid #4f8a5b"></i>公司公休</span>
@@ -181,6 +205,12 @@
 
     <div class="warns hidden" id="warns"><b>提醒</b><ul id="warnList"></ul></div>
 
+    <div class="submitbox hidden" id="submitBox">
+      <div class="streak hidden" id="streakBox"></div>
+      <button class="btn primary" id="submitBtn">送出</button>
+      <div class="hint" id="submitHint"></div>
+    </div>
+
     <footer id="foot"></footer>
   </section>
 </div>
@@ -192,8 +222,10 @@
   <div class="note hidden" id="sNote"></div>
   <ul class="people" id="sPeople"></ul>
   <button class="btn" id="sBtn"></button>
+  <div class="opts" id="sOpts"></div>
   <div class="hint" id="sHint"></div>
 </div>
+<div id="alertBox" role="alertdialog" aria-modal="true"><div class="in"><h3 id="alertTitle"></h3><p id="alertMsg"></p><button class="btn primary" id="alertOk">知道了</button></div></div>
 
 <div id="toast"></div>
 <div id="busy" class="hidden"><div class="spin"></div></div>
@@ -342,11 +374,11 @@ async function load(first, pre){
   finally { if (first) setBusy(false); }
 }
 
-async function act(action, date){
+async function act(action, date, type){
   if (state.busy) return;
   setBusy(true);
   try {
-    const data = await api(action, { date });
+    const data = await api(action, type ? { date, type } : { date });
     render(data);
     toast(data.message || '完成');
     closeSheet();
@@ -395,7 +427,11 @@ function render(d){
     unset:  '主管還沒設定劃假時間'
   }[d.window.status];
 
-  $('#cLeaveLabel').textContent = Number(m) + ' 月自排' + (d.limits.maxMgr ? '（另有公排 ' + d.limits.maxMgr + ' 天由主管排）' : '');
+  $('#cLeaveLabel').textContent = Number(m) + ' 月自排';
+  $('#cWishBox').classList.toggle('hidden', !d.limits.maxMgr);
+  $('#cWish').textContent = d.counts.wish || 0;
+  $('#cWishMax').textContent = ' / ' + d.limits.maxMgr + ' 天';
+  renderTurn(d);
   $('#cLeave').textContent = d.counts.leave;
   $('#cLeaveMax').textContent = ' / ' + d.limits.maxLeave + ' 天';
   $('#cWeekendBox').classList.toggle('hidden', !d.limits.weekendCapped);
@@ -425,6 +461,7 @@ function render(d){
   const ul = $('#warnList'); ul.textContent = '';
   warns.forEach(w => ul.appendChild(el('li', '', w)));
 
+  renderSubmit(d);
   $('#foot').textContent = '網頁 v' + VERSION + '・後端 v' + d.version + '・更新於 ' + d.serverTime.slice(11, 19);
 
   if (state.sel) fillSheet(state.sel);
@@ -458,6 +495,8 @@ function dayState(day){
   if (day.holiday) return { cls: 'holiday', text: '公休' };
   if (day.mine === '自排') return { cls: 'mine-leave', text: day.mineBy === 'admin' ? '自排(主管)' : '自排' };
   if (day.mine === '公排') return { cls: 'mine-mgr', text: '公排' };
+  if (day.mine === '許願') return { cls: 'mine-wish', text: '許願' };
+  if (day.mine && /申請$/.test(day.mine)) return { cls: 'mine-apply', text: day.mine.replace('申請', '待審') };
   if (day.mine) return { cls: 'mine-other', text: day.mine };
   if (day.unlimited) return { cls: 'open', text: '可排' };
   if (day.quota === null) return { cls: 'na', text: '—' };
@@ -507,27 +546,53 @@ function fillSheet(date){
     ul.appendChild(li);
   });
 
-  const btn = $('#sBtn'), hint = $('#sHint');
+  const btn = $('#sBtn'), hint = $('#sHint'), opts = $('#sOpts');
   const isWeekend = day.dow === 0 || day.dow === 6;
   btn.className = 'btn'; btn.disabled = false; hint.textContent = ''; btn.onclick = null;
+  opts.textContent = ''; btn.classList.remove('hidden');
+  const tv = d.turn || {};
+  const locked = tv.submitted ? '你這個月已經送出了，要修改請洽主管' : (tv.active && !tv.isMyTurn ? '還沒輪到你（目前輪到 ' + tv.turnName + '），事假／病假／特休可以先申請' : '');
+  const open = d.window.status === 'open';
+  const hasRoom = day.unlimited || (day.quota !== null && day.quota > 0 && day.used < day.quota);
+  // 下面一排：許願、事假、病假、特休
+  const addOpt = (label, cls, why, fn) => {
+    const o = el('button', cls + (why ? ' off' : ''), label);
+    o.onclick = () => { if (why){ hint.textContent = why; return; } fn(); };
+    opts.appendChild(o);
+  };
+  const showOpts = () => {
+    if (d.limits.maxMgr){
+      const why = !open ? '目前不能劃假' : locked || (!hasRoom ? '這天沒有名額' : (d.counts.wish >= d.limits.maxMgr ? '許願 ' + d.limits.maxMgr + ' 天已經滿了' : ''));
+      addOpt('許願', 'wish', why, () => act('book', date, '許願'));
+    }
+    (d.kinds || []).forEach(k => {
+      const why = !open ? '目前不能申請' : (!hasRoom ? '這天沒有名額' : '');
+      addOpt(k, 'kind', why, () => act('book', date, k));
+    });
+  };
 
   // 不能劃的時候按鈕還是可以按，按了就關掉面板回到月曆
   const disable = (label, why) => { btn.textContent = label; btn.className = 'btn off'; btn.onclick = closeSheet; hint.textContent = why || ''; };
 
   if (day.holiday) return disable('全公司公休', '這天大家統一放假（' + day.holiday + '），不用劃，也不佔自排');
   if (day.mine === '自排' && day.mineBy === 'admin') return disable('已排休', '這天是主管幫你排的，要調整請洽主管');
-  if (day.mine === '自排'){
+  const canCancelMine = day.mine === '自排' || (day.mine === '許願' && day.mineBy !== 'admin') || (/申請$/.test(day.mine || '') && day.mineBy !== 'admin');
+  if (canCancelMine && !/申請$/.test(day.mine) && locked) return disable('取消這天', locked);
+  if (canCancelMine){
+    const what = day.mine === '自排' ? '排休' : day.mine === '許願' ? '許願' : day.mine.replace('申請', '申請');
     if (d.window.status === 'paused') return disable('取消這天', '目前暫停劃假，請等管理員開放');
     if (d.window.status !== 'open') return disable('取消這天', '不在劃假時間，要調整請找人換班並經主管同意');
     btn.className = 'btn danger' + (state.confirmCancel ? ' confirm' : '');
-    btn.textContent = state.confirmCancel ? '確定取消這天？' : '取消這天排休';
+    btn.textContent = state.confirmCancel ? '確定取消這天？' : '取消這天' + what;
+    if (/申請$/.test(day.mine)) hint.textContent = '等主管放行中，放行前可以自己取消';
+    if (day.mine === '許願') hint.textContent = '主管會依實際狀況決定給不給；決定前可以自己取消';
     btn.onclick = () => {
       if (!state.confirmCancel){ state.confirmCancel = true; fillSheet(date); return; }
       act('cancel', date);
     };
     return;
   }
-  if (day.mine) return disable('已排' + day.mine, '這天是主管排的' + day.mine + '，要調整請洽主管');
+  if (day.mine) return disable('已排' + day.mine, day.mine === '公排' ? '這天是公排（主管核准或安排的），要調整請洽主管' : '這天主管已經放行，要調整請洽主管');
   if (d.window.status === 'paused') return disable('劃這天排休', '目前暫停劃假，請等管理員開放');
   if (d.window.status !== 'open') return disable('劃這天排休', '目前不在劃假時間');
   if (!day.unlimited){
@@ -535,7 +600,9 @@ function fillSheet(date){
     if (day.quota <= 0) return disable('這天禁休', day.note);
     if (day.used >= day.quota) return disable('名額已滿', '可以跟已排休的同事協調看看');
   }
-  if (d.counts.leave >= d.limits.maxLeave) return disable('劃這天排休', '自排 ' + d.limits.maxLeave + ' 天已經劃滿');
+  showOpts();
+  if (locked) return disable('劃這天排休', locked);
+  if (d.counts.leave >= d.limits.maxLeave) return disable('劃這天排休', '自排 ' + d.limits.maxLeave + ' 天已經劃滿' + (d.limits.maxMgr ? '，可以按下面「許願」' : ''));
   if (isWeekend && d.limits.weekendCapped && d.counts.weekend >= d.limits.maxWeekend)
     return disable('劃這天排休', '週六日自選 ' + d.limits.maxWeekend + ' 天已經選滿');
 
@@ -544,6 +611,63 @@ function fillSheet(date){
   hint.textContent = day.unlimited ? '這個職務每天不限人數' : '剩 ' + (day.quota - day.used) + ' 個名額';
   btn.onclick = () => act('book', date);
 }
+
+/* ===== 劃假順序 ===== */
+function renderTurn(d){
+  const box = $('#turnBox'), tv = d.turn || {};
+  box.textContent = '';
+  if (!tv.active && !tv.submitted){ box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  if (tv.submitted){ box.className = 'turnbox done'; box.textContent = '你 ' + Number(d.month.slice(5)) + ' 月的排休已經送出' + (tv.submittedAt ? '（' + tv.submittedAt + '）' : '') + '，要修改請洽主管'; return; }
+  if (tv.isMyTurn){ box.className = 'turnbox go'; box.textContent = '輪到你劃假了！自排、許願排好後，按最下面的「送出」換下一位'; }
+  else { box.className = 'turnbox'; box.textContent = '目前輪到 ' + tv.turnName + ' 劃假，你排第 ' + tv.myIndex + ' 位（共 ' + tv.total + ' 位）。輪到你之前可以先看名額；事假／病假／特休隨時可以申請'; }
+  const ol = el('ol');
+  (tv.list || []).forEach(p => ol.appendChild(el('li', (p.turn ? 'turn' : '') + (p.me ? ' me' : ''), p.name + (p.submitted ? '　✓ 已送出' : p.turn ? '　← 劃假中' : ''))));
+  box.appendChild(ol);
+}
+
+/* ===== 送出 ===== */
+function renderSubmit(d){
+  const box = $('#submitBox'), tv = d.turn || {};
+  const show = d.window.status === 'open' && !tv.submitted;
+  box.classList.toggle('hidden', !show);
+  if (!show) return;
+  const needL = Math.max(0, d.limits.maxLeave - d.counts.leave), needW = Math.max(0, d.limits.maxMgr - (d.counts.wish || 0));
+  const streaks = d.streaks || [];
+  $('#streakBox').classList.toggle('hidden', !streaks.length);
+  $('#streakBox').textContent = streaks.length ? '會連續上班 7 天以上：' + streaks.join('、') : '';
+  const btn = $('#submitBtn'), hint = $('#submitHint');
+  const notTurn = tv.active && !tv.isMyTurn;
+  const ready = !needL && !needW && !notTurn;
+  btn.className = 'btn ' + (ready ? 'primary' : 'off');
+  btn.textContent = '送出 ' + Number(d.month.slice(5)) + ' 月排休';
+  hint.textContent = notTurn ? '還沒輪到你' : (needL || needW) ? '還差' + [needL ? ' 自排 ' + needL + ' 天' : '', needW ? ' 許願 ' + needW + ' 天' : ''].join('') + '，排滿才能送出'
+    : '送出後就不能再改' + (tv.active ? '，會換下一位劃假' : '');
+}
+function showAlert(title, msg){
+  $('#alertTitle').textContent = title; $('#alertMsg').textContent = msg;
+  $('#alertBox').classList.add('show');
+}
+$('#alertOk').addEventListener('click', () => $('#alertBox').classList.remove('show'));
+$('#submitBtn').addEventListener('click', async () => {
+  const d = state.data; if (!d || state.busy) return;
+  const tv = d.turn || {};
+  const needL = d.limits.maxLeave - d.counts.leave, needW = d.limits.maxMgr - (d.counts.wish || 0);
+  if (tv.active && !tv.isMyTurn) return showAlert('還沒輪到你', '目前輪到 ' + tv.turnName + ' 劃假');
+  if (needL > 0 || needW > 0) return showAlert('還沒排完', '還差' + [needL > 0 ? ' 自排 ' + needL + ' 天' : '', needW > 0 ? ' 許願 ' + needW + ' 天' : ''].join('') + '。排不滿的話請洽主管');
+  if (!state.confirmSubmit){ state.confirmSubmit = true; $('#submitBtn').textContent = '確定送出？送出後就不能再改'; setTimeout(() => { state.confirmSubmit = false; if (state.data) renderSubmit(state.data); }, 4000); return; }
+  state.confirmSubmit = false;
+  setBusy(true);
+  try {
+    const data = await api('submit', { month: d.month });
+    render(data); toast(data.message || '已送出');
+  } catch(e){
+    if (e.code === 'WORK_STREAK7') showAlert('不能送出：會連上 7 天', e.message);
+    else if (e.code === 'NOT_DONE') showAlert('還沒排完', e.message);
+    else handleError(e);
+    if (state.token && e.code !== 'AUTH') load(false);
+  } finally { setBusy(false); }
+});
 
 /* ===== 小工具 ===== */
 function el(tag, cls, text){
@@ -577,8 +701,8 @@ $('#onlyMine').addEventListener('change', () => { if (state.data) renderList(sta
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js?v=1.0.0"></script>
-<script src="engine-core.js?v=1.1.0"></script>
-<script src="engine.js?v=1.1.1"></script>
+<script src="engine-core.js?v=1.2.0"></script>
+<script src="engine.js?v=1.2.0"></script>
 <script>onGsiLoad();</script>
 </body>
 </html>

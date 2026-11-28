@@ -42,6 +42,24 @@
   .lv-公排{background:#e6effa;color:#4a7fb5;border:1px solid #4a7fb5}
   .lv-特休{background:var(--ov-bg);color:var(--ov);border:1px solid var(--ov)}
   .lv-other{background:var(--full-bg);color:var(--ink)}
+  .lv-許願{background:#fff;color:#4a7fb5;border:1.5px dashed #4a7fb5}
+  .lv-apply{background:#fff;color:var(--ov);border:1.5px dashed var(--ov)}
+  .lv-kind{background:var(--ov-bg);color:var(--ov);border:1px solid var(--ov)}
+  .card2{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:12px}
+  .card2 h3{margin:0 0 6px;font-size:15px} .card2 h3 small{color:var(--sub);font-weight:400;margin-left:6px}
+  .card2 summary{cursor:pointer;font-weight:700;font-size:15px}
+  .rv{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px dashed var(--line);font-size:14px;flex-wrap:wrap}
+  .rv:first-of-type{border-top:0}
+  .rv .who{flex:1;min-width:140px} .rv .who small{color:var(--sub);margin-left:6px}
+  .rv button,.ordbar button,.ol button{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:5px 10px;font:inherit;font-size:13px;cursor:pointer}
+  .rv button.yes{background:var(--ok);color:#fff;border-color:var(--ok)} .rv button.no{color:var(--accent);border-color:var(--accent)}
+  .ordbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0}
+  .ordbar select{font:inherit;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--card)}
+  .ordbar button.save{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  .ol{list-style:none;margin:0;padding:0}
+  .ol li{display:flex;align-items:center;gap:6px;padding:6px 0;border-top:1px dashed var(--line);font-size:14px}
+  .ol li .no{width:22px;color:var(--sub);text-align:right} .ol li .nm{flex:1} .ol li .st{font-size:12px;color:var(--sub)}
+  .ol li.turn .nm{color:var(--ok);font-weight:700} .ol li.sub .nm{color:var(--sub)}
   .lv{position:relative}
   .lv.adm::after{content:'';position:absolute;top:-4px;right:-4px;width:8px;height:8px;border-radius:50%;background:#7b5ea7;border:1.5px solid #fff}
   .bytag{font-size:11px;color:#7b5ea7;margin-left:4px}
@@ -250,7 +268,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s .8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
-<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261127d';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128a';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 <div class="wrap">
@@ -305,9 +323,13 @@
       <div class="legend">
         <span><span class="lv lv-自排">自</span> 自排（同仁自己挑，天數依職務設定）</span>
         <span><span class="lv lv-公排">排</span> 公排（公司排，不算進自排天數）</span>
+        <span><span class="lv lv-許願">願</span> 許願（待你決定）</span>
+        <span><span class="lv lv-apply">待</span> 事假／病假／特休申請（待放行）</span>
         <span><span class="lv lv-特休">特</span> 特休</span>
         <span><span class="lv lv-公休">休</span> 全公司公休</span>
       </div>
+      <div class="card2 hidden" id="reviewBox"></div>
+      <details class="card2" id="orderBox"><summary>劃假順序與送出狀況</summary><div id="orderIn"></div></details>
       <div class="rtools">
         <button id="byDateBtn">📅 依日期列出：每天誰休</button>
         <span class="tag" style="align-self:center">點同仁名字＝看他這個月的排休</span>
@@ -632,10 +654,120 @@ function setView(v){
   return load(state.month);
 }
 
+/* ===== 待審核：許願、事假／病假／特休申請 ===== */
+function renderReview(r){
+  const box = $('#reviewBox'); box.textContent = '';
+  const items = [];
+  r.people.forEach(p => {
+    const mine = r.leaves[p.key] || {};
+    Object.keys(mine).forEach(d => { const t = mine[d]; if (t === '許願' || /申請$/.test(t)) items.push({ p, d, t }); });
+  });
+  items.sort((a, b) => a.d.localeCompare(b.d) || a.p.name.localeCompare(b.p.name));
+  box.classList.toggle('hidden', !items.length);
+  if (!items.length) return;
+  const h = el('h3', '', '待審核 ' + items.length + ' 筆'); h.appendChild(el('small', '', '許願核准＝變成公排；請假放行＝變成事假／病假／特休'));
+  box.appendChild(h);
+  items.forEach(it => {
+    const row = el('div', 'rv');
+    const who = el('span', 'who', it.p.name); who.appendChild(el('small', '', it.p.store + it.p.role + '・' + Number(it.d.slice(5, 7)) + '/' + Number(it.d.slice(8)) + '（' + '日一二三四五六'.charAt(new Date(it.d + 'T00:00:00').getDay()) + '）'));
+    row.appendChild(who);
+    row.appendChild(el('span', lvClass(it.t), it.t === '許願' ? '許願' : it.t.replace('申請', '')));
+    const yes = el('button', 'yes', it.t === '許願' ? '核准（排公排）' : '放行');
+    const no = el('button', 'no', it.t === '許願' ? '不給' : '不放行');
+    yes.onclick = () => reviewAct(it, it.t === '許願' ? '公排' : it.t.replace('申請', ''));
+    no.onclick = () => { if (no.dataset.ask){ reviewAct(it, null); } else { no.dataset.ask = 1; no.textContent = '確定？'; } };
+    row.appendChild(yes); row.appendChild(no);
+    box.appendChild(row);
+  });
+}
+async function reviewAct(it, type){
+  if (state.busy) return;
+  setBusy(true);
+  try {
+    const r = await api('adminSetLeave', { key: it.p.key, date: it.d, type, force: true });
+    renderRoster(r);
+    toast(type === null ? '已退回 ' + it.p.name + ' 的' + (it.t === '許願' ? '許願' : it.t) : '已' + (it.t === '許願' ? '核准 ' : '放行 ') + it.p.name + ' ' + Number(it.d.slice(5, 7)) + '/' + Number(it.d.slice(8)));
+  } catch(e){ handleError(e); }
+  finally { setBusy(false); }
+}
+
+/* ===== 劃假順序 ===== */
+function renderOrder(r){
+  const box = $('#orderIn'); box.textContent = '';
+  const groups = Object.keys(r.orders || {}).sort((a, b) => {
+    const [ra, sa] = a.split('|'), [rb, sb] = b.split('|');
+    const ri = x => { const i = (r.roles || []).indexOf(x); return i < 0 ? 99 : i; }, si = x => { const i = (r.stores || []).indexOf(x); return i < 0 ? 99 : i; };
+    return ri(ra) - ri(rb) || si(sa) - si(sb);
+  });
+  if (!groups.length){ box.appendChild(el('div', 'tag', '目前沒有可以排順序的同仁（要有 Gmail、職務、門市）')); return; }
+  if (!state.oGroup || groups.indexOf(state.oGroup) < 0) state.oGroup = groups[0];
+  const nameOf = e => { const p = r.people.find(x => x.key === e); return p ? p.name : e; };
+  const bar = el('div', 'ordbar');
+  const sel = el('select');
+  groups.forEach(g => { const o = el('option', '', g.split('|')[1] + ' ' + g.split('|')[0] + (r.orders[g].active ? '（照順序）' : '')); o.value = g; sel.appendChild(o); });
+  sel.value = state.oGroup;
+  sel.onchange = () => { state.oGroup = sel.value; state.oDraft = null; renderOrder(r); };
+  bar.appendChild(sel);
+  const og = r.orders[state.oGroup];
+  if (!state.oDraft || state.oDraft.g !== state.oGroup + '|' + r.month) state.oDraft = { g: state.oGroup + '|' + r.month, list: og.list.slice(), dirty: false };
+  const dr = state.oDraft;
+  const save = el('button', 'save', og.active ? (dr.dirty ? '儲存新順序' : '已照這個順序') : '啟用：照這個順序劃假');
+  save.onclick = () => orderAct({ emails: dr.list });
+  bar.appendChild(save);
+  if (og.active){ const off = el('button', '', '取消順序（大家都能劃）'); off.onclick = () => orderAct({ emails: null }); bar.appendChild(off); }
+  box.appendChild(bar);
+  box.appendChild(el('div', 'tag', og.active ? '輪到的人按「送出」後才換下一位；卡住的話可以按「代送出」。' : '還沒啟用：這組同仁現在不用排隊。用 ↑↓ 排好順序後按「啟用」。'));
+  const ol = el('ul', 'ol');
+  const subs = r.submits || {};
+  dr.list.forEach((e, i) => {
+    const li = el('li', (og.active && og.turn === e ? 'turn' : '') + (subs[e] ? ' sub' : ''));
+    li.appendChild(el('span', 'no', String(i + 1)));
+    li.appendChild(el('span', 'nm', nameOf(e)));
+    li.appendChild(el('span', 'st', subs[e] ? '✓ 已送出 ' + (subs[e].at || '').slice(5) + (subs[e].by && subs[e].by !== e ? '（代送出）' : '') : (og.active && og.turn === e ? '← 劃假中' : '')));
+    const up = el('button', '', '↑'); up.disabled = i === 0;
+    up.onclick = () => { const l = dr.list; [l[i - 1], l[i]] = [l[i], l[i - 1]]; dr.dirty = true; renderOrder(r); };
+    const dn = el('button', '', '↓'); dn.disabled = i === dr.list.length - 1;
+    dn.onclick = () => { const l = dr.list; [l[i + 1], l[i]] = [l[i], l[i + 1]]; dr.dirty = true; renderOrder(r); };
+    li.appendChild(up); li.appendChild(dn);
+    const sb = el('button', '', subs[e] ? '撤回' : '代送出');
+    sb.onclick = () => submitForAct(e, !subs[e], nameOf(e));
+    li.appendChild(sb);
+    ol.appendChild(li);
+  });
+  box.appendChild(ol);
+}
+async function orderAct(extra){
+  if (state.busy) return;
+  const [role, store] = state.oGroup.split('|');
+  setBusy(true);
+  try {
+    const r = await api('adminSetOrder', Object.assign({ month: state.roster.month, role, store }, extra));
+    state.oDraft = null;
+    renderRoster(r.people ? r : await api('adminRoster', { month: state.roster.month }));
+    toast(r.message || '已儲存');
+  } catch(e){ handleError(e); }
+  finally { setBusy(false); }
+}
+async function submitForAct(email, submit, name){
+  if (state.busy) return;
+  setBusy(true);
+  try {
+    const r = await api('adminSubmitFor', { month: state.roster.month, key: email, submit });
+    renderRoster(r);
+    toast(r.message || (submit ? '已代 ' + name + ' 送出' : '已撤回'));
+  } catch(e){ handleError(e); }
+  finally { setBusy(false); }
+}
+
 /* ===== 排休總表 ===== */
 const T_SELF = '自排', T_MGR = '公排';
-function lvClass(t){ return [T_SELF, T_MGR, '特休'].indexOf(t) >= 0 ? 'lv lv-' + t : 'lv lv-other'; }
-function lvShort(t){ return { '自排': '自', '公排': '排', '特休': '特' }[t] || String(t).slice(0, 1); }
+function lvClass(t){
+  if ([T_SELF, T_MGR, '特休', '許願'].indexOf(t) >= 0) return 'lv lv-' + t;
+  if (/申請$/.test(t)) return 'lv lv-apply';
+  if (t === '事假' || t === '病假') return 'lv lv-kind';
+  return 'lv lv-other';
+}
+function lvShort(t){ return { '自排': '自', '公排': '排', '特休': '特', '許願': '願' }[t] || String(t).slice(0, 1); }
 function renderRoster(r){
   state.roster = r; state.month = r.month;
   const [y, m] = r.month.split('-');
@@ -697,6 +829,7 @@ function renderRoster(r){
   fr.appendChild(el('td')); fr.appendChild(el('td')); fr.appendChild(el('td')); fr.appendChild(el('td'));
   tf.appendChild(fr); t.appendChild(tf);
   $('#foot').textContent = '管理後台 v' + VERSION + '・後端 v' + r.version + '・更新於 ' + r.serverTime.slice(11, 19);
+  renderReview(r); renderOrder(r);
   if (state.leave) fillLeave();
 }
 function openLeave(p, day){
@@ -1475,8 +1608,8 @@ document.querySelectorAll('input[name=dmode]').forEach(r => r.onchange = syncDay
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js?v=1.0.0"></script>
-<script src="engine-core.js?v=1.1.0"></script>
-<script src="engine.js?v=1.1.1"></script>
+<script src="engine-core.js?v=1.2.0"></script>
+<script src="engine.js?v=1.2.0"></script>
 <script>onGsiLoad();</script>
 </body>
 </html>

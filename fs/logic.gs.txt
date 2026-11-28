@@ -9,7 +9,7 @@
  *           所以只能劃自己的假，不能代填。
  */
 
-const VERSION = '2.4.0';
+const VERSION = '2.5.0';
 const TZ = 'Asia/Taipei';
 const SH = {
   SETTINGS: '設定',
@@ -20,7 +20,9 @@ const SH = {
   LOG: '操作紀錄',
   DEPT: '部門對照',
   TITLE: '職稱對照',
-  HOLIDAY: '公休日'
+  HOLIDAY: '公休日',
+  ORDER: '劃假順序',
+  SUBMIT: '送出紀錄'
 };
 // 沒有對照表時用的預設值
 const DEFAULT_DEPT = { '台北店': '台北', '中壢店': '中壢', '竹北店': '竹北', '台中店': '台中', '楊梅店': '楊梅',
@@ -29,6 +31,13 @@ const DEFAULT_TITLE = [['攝影師', '攝影師'], ['安撫師', '安撫師'], [
   ['業務', '業務'], ['客服', '客服'], ['排版', '排版'], ['美編', '排版']];
 const LEAVE = '自排';   // 同仁自己挑的（每月上限、週末上限都算這種）
 const MGR = '公排';     // 主管排的，不算進同仁每月可自選的天數
+const WISH = '許願';    // 同仁希望哪幾天公排，管理員核准後變成公排（核准前先占名額）
+const KINDS = ['事假', '病假', '特休'];   // 同仁申請、管理員放行；申請中＝「事假申請」，放行後＝「事假」
+const APPLY = '申請';
+function isApply_(t) { return KINDS.some(k => t === k + APPLY); }
+function isKind_(t) { return KINDS.indexOf(t) >= 0 || isApply_(t); }
+/** 計入「每月休假天數」的假（事假／病假／特休另外算） */
+function isMonthOff_(t) { return t === LEAVE || t === MGR || t === WISH; }
 /** 舊名稱自動換成新名稱 */
 function normType_(t) {
   t = String(t || '').trim();
@@ -46,7 +55,7 @@ function doGet() {
 
 /* 只讀的動作可以用快取；其他會寫入的動作一律讀最新資料，做完把快取版本往前推 */
 const READ_ACTIONS = ['whoami', 'load', 'adminLoad', 'adminRoster'];
-const WRITE_ACTIONS = ['book', 'cancel', 'fsSync', 'adminSet', 'adminSaveSettings', 'adminSetMode', 'adminSetAdmins', 'adminSetLeave', 'adminSetDay', 'adminSaveRules'];
+const WRITE_ACTIONS = ['book', 'cancel', 'submit', 'fsSync', 'adminSet', 'adminSaveSettings', 'adminSetMode', 'adminSetOrder', 'adminSubmitFor', 'adminSetAdmins', 'adminSetLeave', 'adminSetDay', 'adminSaveRules'];
 
 function doPost(e) {
   for (const k in MEMO_) delete MEMO_[k];
@@ -104,6 +113,10 @@ function doPostInner_(e) {
           return json_(adminSetDay_(admin, req));
         case 'adminSaveRules':
           return json_(adminSaveRules_(admin, req));
+        case 'adminSetOrder':
+          return json_(adminSetOrder_(admin, req));
+        case 'adminSubmitFor':
+          return json_(adminSubmitFor_(admin, req));
         default:
           return json_({ ok: false, error: '未知的動作', code: 'BAD_REQUEST' });
       }
@@ -119,7 +132,9 @@ function doPostInner_(e) {
         return json_(view);
       }
       case 'book':
-        return json_(book_(me, String(req.date || '')));
+        return json_(book_(me, String(req.date || ''), req.type));
+      case 'submit':
+        return json_(submit_(me, String(req.month || '')));
       case 'cancel':
         return json_(cancel_(me, String(req.date || '')));
       default:
@@ -132,8 +147,10 @@ function doPostInner_(e) {
 
 /* ============================== 劃假／取消 ============================== */
 
-function book_(me, date) {
+function book_(me, date, reqType) {
   assertDate_(date);
+  const kind = reqType && KINDS.indexOf(String(reqType)) >= 0 ? String(reqType) : '';
+  const type = kind ? kind + APPLY : (reqType === WISH ? WISH : LEAVE);
   let bookAfter = null;
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) fail_('現在劃假的人比較多，請過幾秒再按一次', 'BUSY');
@@ -148,14 +165,22 @@ function book_(me, date) {
     if (ctx.holidays[date]) fail_('這天是全公司公休（' + ctx.holidays[date] + '），大家都放假，不用劃', 'HOLIDAY');
     const mine = ctx.bookings.filter(b => b.email === me.email);
     if (mine.some(b => b.date === date)) fail_('這天你已經有排休了', 'DUPLICATE');
+    const mm = Number(month.slice(5)) + ' 月';
+    if (!kind) assertMyTurn_(me, month);
 
     // 指定假天數、週末上限都是「每個月」各自計算
     const myLeave = mine.filter(b => b.type === LEAVE && b.date.slice(0, 7) === month);
     const maxSelf = maxSelf_(s, me.role);
-    if (myLeave.length >= maxSelf) {
-      fail_(Number(month.slice(5)) + ' 月的自排最多 ' + maxSelf + ' 天，你已經劃滿了', 'LIMIT');
+    if (type === LEAVE && myLeave.length >= maxSelf) {
+      fail_(mm + '的自排最多 ' + maxSelf + ' 天，你已經劃滿了', 'LIMIT');
     }
-    if (isWeekend_(date) && weekendCapped_(s, me.role)) {
+    if (type === WISH) {
+      const mx = maxMgr_(s, me.role);
+      const used = mine.filter(b => (b.type === WISH || b.type === MGR) && b.date.slice(0, 7) === month).length;
+      if (!mx) fail_('你的職務沒有公排天數，不用許願', 'LIMIT');
+      if (used >= mx) fail_(mm + '的許願（含已排公排）最多 ' + mx + ' 天，你已經滿了', 'LIMIT');
+    }
+    if (type === LEAVE && isWeekend_(date) && weekendCapped_(s, me.role)) {
       const wk = myLeave.filter(b => isWeekend_(b.date)).length;
       if (wk >= s.maxWeekend) {
         fail_(Number(month.slice(5)) + ' 月的週六日最多自選 ' + s.maxWeekend + ' 天，你已經選滿了', 'LIMIT');
@@ -169,34 +194,40 @@ function book_(me, date) {
       if (slot.used >= slot.quota) fail_('這天的名額剛剛被劃走了', 'FULL');
     }
 
-    const run = runLength_(mine.map(b => b.date).concat([date]), date);
-    if (run > s.maxConsecutive) {
-      fail_('這樣會連休 ' + run + ' 天，超過 ' + s.maxConsecutive + ' 天需要事先取得主管同意，請洽主管', 'CONSECUTIVE');
+    if (!kind) {
+      // 連休上限只看自排／公排／許願（事假、病假、特休不算）
+      const run = runLength_(mine.filter(b => isMonthOff_(b.type)).map(b => b.date).concat([date]), date);
+      if (run > s.maxConsecutive) {
+        fail_('這樣會連休 ' + run + ' 天，超過 ' + s.maxConsecutive + ' 天需要事先取得主管同意，請洽主管', 'CONSECUTIVE');
+      }
+      // 不能讓這個月注定出現連續上班 7 天：剩下的休假天數要夠把每一段上班切到 6 天以內
+      const inMonth = mine.filter(b => b.date.slice(0, 7) === month);
+      const w = workCheck_(s, me.role, month, inMonth.filter(b => isMonthOff_(b.type)).map(b => b.date).concat([date]), ctx.holidays,
+        inMonth.filter(b => isKind_(b.type)).map(b => b.date));
+      if (w.need > w.remaining) {
+        fail_('這樣排的話，' + label_(w.longestStart) + ' 起會連續上班 ' + w.longest + ' 天，剩下的 ' + w.remaining +
+          ' 天休假不夠把每段上班切到 6 天以內（不能連上 7 天），請換一天', 'WORK_STREAK');
+      }
     }
 
-    // 不能讓這個月注定出現連續上班 7 天：剩下的休假天數要夠把每一段上班切到 6 天以內
-    const w = workCheck_(s, me.role, month, mine.filter(b => b.date.slice(0, 7) === month).map(b => b.date).concat([date]), ctx.holidays);
-    if (w.need > w.remaining) {
-      fail_('這樣排的話，' + label_(w.longestStart) + ' 起會連續上班 ' + w.longest + ' 天，剩下的 ' + w.remaining +
-        ' 天休假不夠把每段上班切到 6 天以內（不能連上 7 天），請換一天', 'WORK_STREAK');
-    }
-
-    const newRow = [date, me.email, me.name, me.role, me.store, LEAVE, nowStr_(), me.email];
+    const newRow = [date, me.email, me.name, me.role, me.store, type, nowStr_(), me.email];
     sheet_(SH.BOOK).appendRow(newRow);
     if (freshBookRows_()) freshBookRows_().push(newRow);
-    log_(me, '劃假', date);
+    log_(me, type === LEAVE ? '劃假' : (type === WISH ? '許願' : kind + '申請'), date);
     SpreadsheetApp.flush(); // 一定要先寫進去再放開鎖
     bookAfter = freshBookRows_();
   } finally {
     lock.releaseLock();
   }
   afterWrite_([SH.BOOK], bookAfter);
-  return Object.assign(buildView_(me, readContext_(), date.slice(0, 7)), { message: '已劃 ' + label_(date) + ' 排休' });
+  const msg = type === LEAVE ? '已劃 ' + label_(date) + ' 排休' :
+    type === WISH ? '已許願 ' + label_(date) + '，等主管決定' : '已送出 ' + label_(date) + ' ' + kind + '申請，等主管放行';
+  return Object.assign(buildView_(me, readContext_(), date.slice(0, 7)), { message: msg });
 }
 
 function cancel_(me, date) {
   assertDate_(date);
-  let bookAfter = null;
+  let bookAfter = null, t = '';
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) fail_('現在劃假的人比較多，請過幾秒再按一次', 'BUSY');
   try {
@@ -205,16 +236,18 @@ function cancel_(me, date) {
     const values = [[]].concat(rows_(SH.BOOK));
     let row = -1;
     for (let i = values.length - 1; i >= 1; i--) {
+      const tt = normType_(values[i][5]);
       if (normDate_(values[i][0]) === date &&
           normEmail_(values[i][1]) === me.email &&
-          normType_(values[i][5]) === LEAVE) {
+          (tt === LEAVE || tt === WISH || isApply_(tt))) {
         const by = normEmail_(values[i][7]);
         if (by && by !== me.email) fail_('這天是主管幫你排的，要調整請洽主管', 'BY_ADMIN');
-        row = i + 1;
+        row = i + 1; t = tt;
         break;
       }
     }
-    if (row < 0) fail_('找不到你這天的排休（公排請洽主管調整）', 'NOT_FOUND');
+    if (row < 0) fail_('找不到你這天的排休（公排、已放行的假請洽主管調整）', 'NOT_FOUND');
+    if (!isApply_(t)) assertMyTurn_(me, date.slice(0, 7));
     sh.deleteRow(row);
     if (freshBookRows_()) freshBookRows_().splice(row - 2, 1);
     log_(me, '取消', date);
@@ -224,7 +257,191 @@ function cancel_(me, date) {
     lock.releaseLock();
   }
   afterWrite_([SH.BOOK], bookAfter);
-  return Object.assign(buildView_(me, readContext_(), date.slice(0, 7)), { message: '已取消 ' + label_(date) + ' 排休' });
+  return Object.assign(buildView_(me, readContext_(), date.slice(0, 7)), { message: '已取消 ' + label_(date) + (t === WISH ? ' 許願' : isApply_(t) ? ' 的' + t : ' 排休') });
+}
+
+/* ============================== 劃假順序／送出 ============================== */
+
+/** 沒有這張工作表時當作空的（舊試算表還沒建） */
+function optRows_(name) {
+  if (!SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name)) return [];
+  return rows_(name);
+}
+function ensureSheet_(name, header) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    sh.getRange(1, 1, 1, header.length).setValues([header]);
+    sh.setFrozenRows(1);
+    sh.getRange('A:A').setNumberFormat('@');
+  }
+  return sh;
+}
+const ORDER_HEADER_ = ['月份', '職務', '門市', '順序（Email，用逗號分隔）'];
+const SUBMIT_HEADER_ = ['月份', 'Email', '送出時間', '操作者'];
+
+/** 管理員設定的順序：{ '職務|門市': [email…] }（有設定的組才會照順序） */
+function getOrders_(month) {
+  const out = {};
+  optRows_(SH.ORDER).forEach(r => {
+    if (toMonth_(r[0]) !== month) return;
+    const g = String(r[1]).trim() + '|' + String(r[2]).trim();
+    out[g] = String(r[3] || '').split(/[,，\s]+/).map(normEmail_).filter(Boolean);
+  });
+  return out;
+}
+/** 這個月誰送出了：{ email: { at, by } } */
+function getSubmits_(month) {
+  const out = {};
+  optRows_(SH.SUBMIT).forEach(r => {
+    if (toMonth_(r[0]) !== month) return;
+    const e = normEmail_(r[1]);
+    if (e) out[e] = { at: isDate_(r[2]) ? fmt_(r[2], 'yyyy-MM-dd HH:mm') : String(r[2] || ''), by: normEmail_(r[3]) };
+  });
+  return out;
+}
+/** 某一組的完整順序：管理員排的在前，其他同組同仁照人員表順序接在後面 */
+function groupOrder_(g, orders, staff) {
+  const members = staff.filter(p => p.email && p.role + '|' + p.store === g).map(p => normEmail_(p.email));
+  const head = (orders[g] || []).filter(e => members.indexOf(e) >= 0);
+  return head.concat(members.filter(e => head.indexOf(e) < 0));
+}
+/** 每組現在輪到誰（全部送出＝''） */
+function monthMeta_(month) {
+  const orders = getOrders_(month), subs = getSubmits_(month), staff = getStaff_();
+  const ord = {}, oi = {}, turn = {}, sub = {};
+  Object.keys(subs).forEach(e => { sub[e] = subs[e].at || '1'; });
+  Object.keys(orders).forEach(g => {
+    const list = groupOrder_(g, orders, staff);
+    ord[g] = list;
+    oi[g] = {};
+    list.forEach((e, i) => { oi[g][e] = i; });
+    turn[g] = list.find(e => !subs[e]) || '';
+  });
+  return { ord: ord, oi: oi, turn: turn, sub: sub };
+}
+/** 自排／許願：有設定順序的話，要輪到自己、而且還沒送出 */
+function assertMyTurn_(me, month) {
+  const subs = getSubmits_(month);
+  if (subs[me.email]) fail_('你 ' + Number(month.slice(5)) + ' 月已經送出了，要修改請洽主管', 'SUBMITTED');
+  const orders = getOrders_(month);
+  const g = me.role + '|' + me.store;
+  if (!orders[g]) return;
+  const list = groupOrder_(g, orders, getStaff_());
+  const t = list.find(e => !subs[e]) || '';
+  if (t !== me.email) {
+    const who = getStaff_().find(p => normEmail_(p.email) === t);
+    fail_('還沒輪到你劃假，目前輪到 ' + (who ? who.name : t) + '（你排第 ' + (list.indexOf(me.email) + 1) + ' 位）', 'NOT_YOUR_TURN');
+  }
+}
+function turnView_(me, month) {
+  const subs = getSubmits_(month);
+  const orders = getOrders_(month);
+  const g = me.role + '|' + me.store;
+  const out = { active: !!orders[g], submitted: !!subs[me.email], submittedAt: subs[me.email] ? subs[me.email].at : '' };
+  if (!orders[g]) return out;
+  const staff = getStaff_();
+  const list = groupOrder_(g, orders, staff);
+  const t = list.find(e => !subs[e]) || '';
+  const nameOf = e => { const p = staff.find(x => normEmail_(x.email) === e); return p ? p.name : e; };
+  out.myIndex = list.indexOf(me.email) + 1;
+  out.total = list.length;
+  out.isMyTurn = t === me.email;
+  out.turnName = t ? nameOf(t) : '';
+  out.list = list.map(e => ({ name: nameOf(e), submitted: !!subs[e], turn: e === t, me: e === me.email }));
+  return out;
+}
+/** 這個月會連續上班 7 天以上的區間：[[起, 迄, 天數]…]（公休日算放假） */
+function streaks7_(month, offDates, holidays) {
+  const off = {};
+  offDates.forEach(d => { off[d] = true; });
+  Object.keys(holidays || {}).forEach(d => { off[d] = true; });
+  const out = [];
+  let start = null, n = 0, prev = null;
+  monthDays_(month).concat(['END']).forEach(d => {
+    if (d !== 'END' && !off[d]) { if (!n) start = d; n++; prev = d; return; }
+    if (n >= 7) out.push([start, prev, n]);
+    n = 0;
+  });
+  return out;
+}
+
+/** 同仁按「送出」：自排、許願都排滿，而且不會連上 7 天，才能送出；送出後換下一位 */
+function submit_(me, month) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) fail_('現在劃假的人比較多，請過幾秒再按一次', 'BUSY');
+  try {
+    const ctx = readContext_();
+    const s = ctx.settings;
+    assertOpen_(s);
+    month = toMonth_(month);
+    if (s.months.indexOf(month) < 0) fail_('目前只能送出 ' + s.months.join('、') + ' 的假', 'BAD_DATE');
+    assertMyTurn_(me, month);
+    const mine = ctx.bookings.filter(b => b.email === me.email && b.date.slice(0, 7) === month);
+    const mm = Number(month.slice(5)) + ' 月';
+    const leave = mine.filter(b => b.type === LEAVE).length;
+    const wish = mine.filter(b => b.type === WISH || b.type === MGR).length;
+    const needL = maxSelf_(s, me.role) - leave, needW = maxMgr_(s, me.role) - wish;
+    if (needL > 0 || needW > 0) {
+      fail_(mm + '還沒排完：' + [needL > 0 ? '自排還差 ' + needL + ' 天' : '', needW > 0 ? '許願還差 ' + needW + ' 天' : ''].filter(Boolean).join('、') +
+        '。排不滿的話請洽主管', 'NOT_DONE');
+    }
+    const st = streaks7_(month, mine.map(b => b.date), ctx.holidays);
+    if (st.length) {
+      fail_('會連續上班 7 天以上，不能送出：\n' + st.map(r => '・' + label_(r[0]) + '～' + label_(r[1]) + '　連上 ' + r[2] + ' 天').join('\n') +
+        '\n請調整自排或許願，讓每段上班都在 6 天以內', 'WORK_STREAK7');
+    }
+    ensureSheet_(SH.SUBMIT, SUBMIT_HEADER_).appendRow([month, me.email, nowStr_(), me.email]);
+    log_(me, '送出', month);
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+  afterWrite_([SH.SUBMIT]);
+  return Object.assign(buildView_(me, readContext_(), month), { message: '已送出 ' + Number(month.slice(5)) + ' 月的排休' });
+}
+
+/** 管理員設定某組的劃假順序（emails 空＝取消順序，大家都可以劃） */
+function adminSetOrder_(admin, req) {
+  const month = toMonth_(req.month);
+  const role = String(req.role || '').trim(), store = String(req.store || '').trim();
+  if (!month || !role || !store) fail_('請選月份、職務、門市', 'BAD_REQUEST');
+  const emails = Array.isArray(req.emails) ? req.emails.map(normEmail_).filter(Boolean) : null;
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) fail_('系統忙碌中，請過幾秒再試', 'BUSY');
+  try {
+    const sh = ensureSheet_(SH.ORDER, ORDER_HEADER_);
+    deleteRowsWhere_(sh, r => toMonth_(r[0]) === month && String(r[1]).trim() === role && String(r[2]).trim() === store);
+    if (emails) sh.appendRow([month, role, store, emails.join(',')]);
+    log_({ email: admin, name: '管理員' }, emails ? '設定劃假順序' : '取消劃假順序', month + '｜' + store + role);
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+  afterWrite_([SH.ORDER]);
+  return Object.assign(adminRoster_(admin, month), { message: emails ? '已儲存 ' + store + role + '的劃假順序' : '已取消 ' + store + role + '的劃假順序' });
+}
+/** 管理員幫同仁送出（卡住時）或撤回送出（讓他再改） */
+function adminSubmitFor_(admin, req) {
+  const month = toMonth_(req.month);
+  const staff = getRosterStaff_();
+  const p = staff.find(x => x.key === String(req.key || ''));
+  if (!month || !p || !p.email) fail_('找不到這位同仁', 'NOT_FOUND');
+  const email = normEmail_(p.email);
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) fail_('系統忙碌中，請過幾秒再試', 'BUSY');
+  try {
+    const sh = ensureSheet_(SH.SUBMIT, SUBMIT_HEADER_);
+    deleteRowsWhere_(sh, r => toMonth_(r[0]) === month && normEmail_(r[1]) === email);
+    if (req.submit) sh.appendRow([month, email, nowStr_(), admin]);
+    log_({ email: admin, name: '管理員' }, req.submit ? '代為送出' : '撤回送出', month + '｜' + p.name);
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+  afterWrite_([SH.SUBMIT]);
+  return Object.assign(adminRoster_(admin, month), { message: req.submit ? '已幫 ' + p.name + ' 送出' : '已撤回 ' + p.name + ' 的送出，他可以再修改' });
 }
 
 /* ============================== 名額計算 ============================== */
@@ -294,10 +511,11 @@ function totalOff_(s, role) {
  * offDates：這個人這個月已排（含這次）的日期；公休日也算放假但不佔天數
  * need＝還至少要再休幾天才能把每段上班切到 6 天以內；remaining＝這個月還剩幾天假可以排
  */
-function workCheck_(s, role, month, offDates, holidays) {
+function workCheck_(s, role, month, offDates, holidays, extraOff) {
   const days = monthDays_(month);
   const off = {};
   offDates.forEach(d => { off[d] = true; });
+  (extraOff || []).forEach(d => { off[d] = true; });   // 事假／病假／特休：算放假，但不佔每月休假天數
   Object.keys(holidays || {}).forEach(d => { off[d] = true; });
   let need = 0, run = 0, start = null, longest = 0, longestStart = days[0];
   days.concat(['END']).forEach(d => {
@@ -349,6 +567,7 @@ function buildView_(me, ctx, month) {
   month = s.months.indexOf(toMonth_(month)) >= 0 ? toMonth_(month) : s.months[0];
   const myAll = ctx.bookings.filter(b => b.email === me.email && b.date.slice(0, 7) === month);
   const myLeave = myAll.filter(b => b.type === LEAVE);
+  const myWish = myAll.filter(b => b.type === WISH || b.type === MGR);
   const days = monthDays_(month).map(date => {
     const slot = slot_(ctx, me, date);
     const mine = myAll.find(b => b.date === date);
@@ -388,8 +607,14 @@ function buildView_(me, ctx, month) {
     },
     counts: {
       leave: myLeave.length,
-      weekend: myLeave.filter(b => isWeekend_(b.date)).length
+      weekend: myLeave.filter(b => isWeekend_(b.date)).length,
+      wish: myWish.length,
+      wishPending: myAll.filter(b => b.type === WISH).length,
+      kinds: myAll.filter(b => isKind_(b.type)).length
     },
+    kinds: KINDS,
+    turn: turnView_(me, month),
+    streaks: streaks7_(month, myAll.map(b => b.date), ctx.holidays).map(r => label_(r[0]) + '～' + label_(r[1]) + '（' + r[2] + ' 天）'),
     warnings: myLeave.length ? warnings_(month, myAll, ctx.holidays) : [],
     days: days,
     serverTime: nowStr_()
@@ -642,6 +867,9 @@ function adminRoster_(admin, month) {
     people: people.map(p => { delete p.order; return p; }),
     leaves: leaves,
     leavesBy: leavesBy,
+    orders: rosterOrders_(month, staff),
+    submits: getSubmits_(month),
+    kinds: KINDS,
     maxLeave: s.monthOff,
     monthOff: s.monthOff,
     serverTime: nowStr_()
@@ -653,6 +881,19 @@ function adminRoster_(admin, month) {
  * 超過名額或個人上限時回傳 NEED_CONFIRM，管理員確認後帶 force:true 再送一次。
  * req: { key, date, type（自排/公排/特休…；null＝清除）, force }
  */
+/** 排休總表用：每組的順序與目前輪到誰 */
+function rosterOrders_(month, staff) {
+  const orders = getOrders_(month), subs = getSubmits_(month);
+  const out = {};
+  const groups = {};
+  staff.forEach(p => { if (p.email && p.role && p.store) groups[p.role + '|' + p.store] = 1; });
+  Object.keys(groups).forEach(g => {
+    const list = groupOrder_(g, orders, staff);
+    const t = orders[g] ? (list.find(e => !subs[e]) || '') : '';
+    out[g] = { active: !!orders[g], list: list, turn: t };
+  });
+  return out;
+}
 function adminSetLeave_(admin, req) {
   const date = String(req.date || '');
   assertDate_(date);
@@ -715,7 +956,9 @@ function adminSetLeave_(admin, req) {
           const mm = maxMgr_(s, p.role);
           if (mgrCnt >= mm) issues.push(p.name + ' ' + Number(month.slice(5)) + ' 月的公排已經有 ' + mgrCnt + ' 天（' + p.role + '設定 ' + mm + ' 天）');
         }
-        const wk7 = workCheck_(s, p.role, month, mine.filter(b => b.date.slice(0, 7) === month && b.date !== date).map(b => b.date).concat([date]), ctx.holidays);
+        const inM = mine.filter(b => b.date.slice(0, 7) === month && b.date !== date);
+        const wk7 = workCheck_(s, p.role, month, inM.filter(b => isMonthOff_(b.type)).map(b => b.date).concat(isKind_(type) ? [] : [date]), ctx.holidays,
+          inM.filter(b => isKind_(b.type)).map(b => b.date).concat(isKind_(type) ? [date] : []));
         if (wk7.need > wk7.remaining) issues.push(label_(wk7.longestStart) + ' 起會連續上班 ' + wk7.longest + ' 天，剩下的休假不夠切到 6 天以內');
         const run = runLength_(mine.map(b => b.date).concat([date]), date);
         if (run > s.maxConsecutive) issues.push('會連休 ' + run + ' 天（上限 ' + s.maxConsecutive + '）');
@@ -1372,7 +1615,7 @@ function fsSyncAll_(force) {
   if (!force && fsGet_('cfg/main')) throw new Error('Firestore 版已經有資料了，為了不蓋掉新版上的排休，這次沒有複製。真的要覆蓋請執行 syncAllToFirestoreForce');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const tables = {};
-  [SH.SETTINGS, SH.STAFF, SH.QUOTA, SH.OVERRIDE, SH.HOLIDAY, SH.DEPT, SH.TITLE].forEach(n => {
+  FS_TABLES_().forEach(n => {
     const sh = ss.getSheetByName(n);
     tables[n] = JSON.stringify(sh ? packVals_(sh.getDataRange().getValues()) : [[]]);
   });
@@ -1394,7 +1637,8 @@ function fsSyncAll_(force) {
     fsReset_();
     const pools = fsPools_(m, fsCombos_(b));
     Object.keys(b).forEach(k => { b[k].sl = pools.pm[b[k].d + '|' + b[k].r + '|' + b[k].st] || ''; });
-    writes.push(fsUpdate_('months/' + m, { b: b, pm: pools.pm, q: pools.q, c: fsCount_(b, pools.pm), pub: pub, last: { k: '', s: '', op: 'admin' } }));
+    writes.push(fsUpdate_('months/' + m, Object.assign({ b: b, pm: pools.pm, q: pools.q, c: fsCount_(b, pools.pm), pub: pub, last: { k: '', s: '', op: 'admin' } },
+      fsMeta_(m, fsSubFromSheet_(m)))));
   });
   fsCommit_(writes);
   const msg = '已複製到 Firestore：人員 ' + Object.keys(cfg.staffMap).length + ' 位、劃假紀錄 ' + rows.length + ' 筆、月份 ' + list.join(', ');
@@ -1431,7 +1675,7 @@ function installFsTrigger() {
  * 劃假紀錄：以 Firestore 為準整份寫回（試算表只當查看用的副本）。
  * 設定類工作表：也寫回，但「試算表手動改過、還沒同步到 Firestore」的工作表會先跳過，避免蓋掉你剛改的東西。
  */
-const FS_TABLES_ = () => [SH.SETTINGS, SH.STAFF, SH.QUOTA, SH.OVERRIDE, SH.HOLIDAY, SH.DEPT, SH.TITLE];
+const FS_TABLES_ = () => [SH.SETTINGS, SH.STAFF, SH.QUOTA, SH.OVERRIDE, SH.HOLIDAY, SH.DEPT, SH.TITLE, SH.ORDER];
 function nightlyPullFromFirestore() { return pullFromFirestore('每晚自動'); }
 function pullFromFirestore(by) {
   const lock = LockService.getScriptLock();
@@ -1445,8 +1689,16 @@ function pullFromFirestore(by) {
     FS_TABLES_().forEach(n => {
       if (!cfg.tables || cfg.tables[n] === undefined) return;
       if (dirty[n]) { skipped.push(n); return; }
-      fsWriteSheet_(ss.getSheetByName(n), unpackVals_(JSON.parse(cfg.tables[n])));
+      const rows = unpackVals_(JSON.parse(cfg.tables[n]));
+      const sh = ss.getSheetByName(n) || (n === SH.ORDER ? ensureSheet_(SH.ORDER, ORDER_HEADER_) : null);
+      if (sh && !(n === SH.ORDER && rows.length <= 1 && !(rows[0] || []).join(''))) fsWriteSheet_(sh, rows);
     });
+    // 送出紀錄：Firestore 有的月份整個換掉
+    const subSh = ensureSheet_(SH.SUBMIT, SUBMIT_HEADER_);
+    const subOld = subSh.getDataRange().getValues();
+    const subRows = subOld.slice(1).filter(r => r[0] && !months.some(m => m.id === toMonth_(r[0])));
+    months.forEach(m => { const sub = m.data.sub || {}; Object.keys(sub).forEach(e => subRows.push([m.id, e, (sub[e] && sub[e].a) || '', (sub[e] && sub[e].b) || ''])); });
+    fsWriteSheet_(subSh, [SUBMIT_HEADER_].concat(subRows));
     // 劃假紀錄：Firestore 有的月份整個換掉，其他月份保留
     const bookSh = ss.getSheetByName(SH.BOOK);
     const have = {};
@@ -1506,7 +1758,10 @@ function fsPush_(withBookings, by) {
         fsReset_();
         const pools = fsPools_(m, fsCombos_(b));
         Object.keys(b).forEach(k => { b[k].sl = pools.pm[b[k].d + '|' + b[k].r + '|' + b[k].st] || ''; });
-        const w = fsUpdate_('months/' + m, { b: b, pm: pools.pm, q: pools.q, c: fsCount_(b, pools.pm), pub: pub, last: { k: '', s: '', op: 'admin' } });
+        // 送出紀錄：連劃假紀錄一起同步時以試算表為準，否則保留 Firestore 上的
+        const sub = withBookings ? fsSubFromSheet_(m) : ((byId[m] && byId[m].data.sub) || {});
+        const w = fsUpdate_('months/' + m, Object.assign({ b: b, pm: pools.pm, q: pools.q, c: fsCount_(b, pools.pm), pub: pub, last: { k: '', s: '', op: 'admin' } },
+          fsMeta_(m, sub)));
         // 讀取之後如果有同仁剛好劃假，這次寫入會失敗，重新讀一次再來
         w.currentDocument = byId[m] ? { updateTime: byId[m].updateTime } : { exists: false };
         writes.push(w);
@@ -1593,6 +1848,24 @@ function fsWriteSheet_(sh, rows) {
   if (data.length) sh.getRange(1, 1, data.length, w).setValues(data);
 }
 
+/** 送出紀錄（試算表）→ Firestore 的 sub：{ email: { a: 時間, b: 操作者 } } */
+function fsSubFromSheet_(month) {
+  const subs = getSubmits_(month), out = {};
+  Object.keys(subs).forEach(e => { out[e] = { a: subs[e].at || '', b: subs[e].by || '' }; });
+  return out;
+}
+/** 月份文件的順序欄位：ord（每組順序）、oi（每人第幾位）、turn（輪到誰）、sub（送出紀錄） */
+function fsMeta_(month, sub) {
+  const orders = getOrders_(month), staff = getStaff_();
+  const ord = {}, oi = {}, turn = {};
+  Object.keys(orders).forEach(g => {
+    const list = groupOrder_(g, orders, staff);
+    ord[g] = list; oi[g] = {};
+    list.forEach((e, i) => { oi[g][e] = i; });
+    turn[g] = list.find(e => !sub[e]) || '';
+  });
+  return { ord: ord, oi: oi, turn: turn, sub: sub };
+}
 function fsReset_() { for (const k in MEMO_) delete MEMO_[k]; FRESH_ = true; }
 
 function fsDerived_(s) {
@@ -2026,6 +2299,8 @@ function setup() {
   make_(ss, SH.HOLIDAY, ['日期', '名稱'], [], { textCols: [1] });
   make_(ss, SH.BOOK, ['日期', 'Email', '姓名', '職位', '門市', '類型', '建立時間', '建立者'], [], { textCols: [1] });
   make_(ss, SH.LOG, ['時間', 'Email', '姓名', '動作', '日期'], [], { textCols: [1, 5] });
+  make_(ss, SH.ORDER, ORDER_HEADER_, [], { textCols: [1] });
+  make_(ss, SH.SUBMIT, SUBMIT_HEADER_, [], { textCols: [1] });
 }
 
 function make_(ss, name, header, rows, opt) {

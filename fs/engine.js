@@ -13,12 +13,13 @@
 (function () {
   'use strict';
   const C = window.LeaveCore;
-  const FS_VERSION = '1.1.1';
+  const FS_VERSION = '1.2.0';
   const OWNER = 'xemepark@gmail.com';
   const BOOK_HEADER = ['日期', 'Email', '姓名', '職位', '門市', '類型', '建立時間', '建立者'];
   const LOG_HEADER = ['時間', 'Email', '姓名', '動作', '內容'];
   const READ = ['whoami', 'load', 'adminLoad', 'adminRoster'];
-  const TX = ['book', 'cancel', 'adminSetLeave'];
+  const TX = ['book', 'cancel', 'submit', 'adminSetLeave', 'adminSubmitFor'];
+  const SUBMIT_HEADER = ['月份', 'Email', '送出時間', '操作者'];
 
   firebase.initializeApp(window.FIREBASE_CONFIG);
   const auth = firebase.auth();
@@ -54,6 +55,9 @@
     let rows = [];
     Object.keys(months).sort().forEach(m => { rows = rows.concat(C.entriesToRows(months[m].b)); });
     G.sheets[C.BOOK] = C.makeSheet(C.BOOK, [BOOK_HEADER].concat(rows));
+    let subRows = [];
+    Object.keys(months).sort().forEach(m => { subRows = subRows.concat(subToRows(m, months[m].sub)); });
+    G.sheets[C.SUBMIT] = C.makeSheet(C.SUBMIT, [SUBMIT_HEADER].concat(subRows));
     if (!G.sheets[C.LOG]) G.sheets[C.LOG] = C.makeSheet(C.LOG, [LOG_HEADER]);
     try { G.bumpVer_(); } catch (e) {}
   }
@@ -62,6 +66,31 @@
     const sh = G.sheets[C.BOOK];
     const keep = sh.data.slice(1).filter(r => C.normDate(r[0]).slice(0, 7) !== m);
     sh.data = [BOOK_HEADER].concat(keep, C.entriesToRows(b));
+  }
+  /* 送出紀錄 ⇄ 月份文件的 sub：{ email: { a: 時間, b: 操作者 } } */
+  function subToRows(m, sub) {
+    return Object.keys(sub || {}).map(e => [m, e, (sub[e] && sub[e].a) || '', (sub[e] && sub[e].b) || '']);
+  }
+  function setMonthSub(m, sub) {
+    const sh = G.sheets[C.SUBMIT];
+    const keep = sh.data.slice(1).filter(r => String(r[0]) !== m);
+    sh.data = [SUBMIT_HEADER].concat(keep, subToRows(m, sub));
+  }
+  function subFromSheet(m) {
+    const out = {};
+    G.sheets[C.SUBMIT].data.slice(1).forEach(r => {
+      if (String(r[0]).slice(0, 7) !== m) return;
+      const e = C.normEmail(r[1]);
+      const at = r[2] instanceof Date ? C.fmtDate(r[2], '', 'yyyy-MM-dd HH:mm') : String(r[2] || '');
+      if (e) out[e] = { a: at, b: C.normEmail(r[3]) };
+    });
+    return out;
+  }
+  /** 這個月的順序、輪到誰（照 Code.gs 算），加上送出紀錄 */
+  function monthMeta(m) {
+    G.__reset();
+    const x = G.monthMeta_(m);
+    return { ord: x.ord, oi: x.oi, turn: x.turn, sub: subFromSheet(m) };
   }
   function monthRows(m) {
     return G.sheets[C.BOOK].data.slice(1).filter(r => C.normDate(r[0]).slice(0, 7) === m);
@@ -127,7 +156,7 @@
   }
   async function txWrite(body) {
     const date = String(body.date || '');
-    const m = date.slice(0, 7);
+    const m = date ? date.slice(0, 7) : String(body.month || '').slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(m)) return run(body);
     const ref = db.doc('months/' + m);
     let result = null;
@@ -137,18 +166,32 @@
         const doc = snap.exists ? snap.data() : null;
         // 用最新的資料檢查（別人可能剛劃走名額）
         setMonthRows(m, doc ? doc.b : {});
+        setMonthSub(m, doc ? doc.sub : {});
         const logFrom = snapshotLog();
         result = run(body);
         if (!result.ok) { G.sheets[C.LOG].data.length = logFrom; return; }
         if (!doc || !doc.pm) { result = err('這個月份還沒開放劃假（名額表還沒建立），請洽管理員', 'NOT_OPEN'); return; }
         const b = rowsToB(monthRows(m));
-        const isAdminAct = body.action === 'adminSetLeave';
-        const next = { b, pm: doc.pm, q: doc.q, pub: doc.pub || 0 };
+        const isAdminAct = body.action.indexOf('admin') === 0;
+        // 其他欄位（順序、送出紀錄…）原樣保留，只改這次有動到的
+        const next = Object.assign({}, doc, { b });
         if (isAdminAct) {
-          // 管理員：直接重算每個名額池的已用數
+          // 管理員：直接重算每個名額池的已用數、順序、輪到誰
           Object.keys(b).forEach(k => { if (!b[k].sl) b[k].sl = doc.pm[b[k].d + '|' + b[k].r + '|' + b[k].st] || ''; });
           next.c = C.countPools(b, doc.pm);
+          Object.assign(next, monthMeta(m));
           next.last = { k: '', s: '', op: 'admin' };
+        } else if (body.action === 'submit') {
+          // 同仁送出：只動自己的送出紀錄、自己這一組輪到誰（安全規則會再檢查）
+          const me = authEmail();
+          const meta = monthMeta(m);
+          const st = (cfg.staffMap || {})[me] || {};
+          const g = st.role + '|' + st.store;
+          delete next.b; next.b = doc.b;
+          next.sub = Object.assign({}, doc.sub || {}, { [me]: meta.sub[me] || { a: '', b: me } });
+          next.turn = Object.assign({}, doc.turn || {});
+          if (g in next.turn) next.turn[g] = meta.turn[g] || '';
+          next.last = { k: '', s: '', op: 'submit' };
         } else {
           // 同仁：只能動自己這一筆，已用名額 +1 或 -1（安全規則會再檢查一次）
           const me = authEmail();
@@ -205,7 +248,7 @@
       const b = rowsToB(monthRows(m));
       const { pm, q } = C.computePools(G, m, C.combosFor(G, b));
       Object.keys(b).forEach(k => { b[k].sl = pm[b[k].d + '|' + b[k].r + '|' + b[k].st] || ''; });
-      out[m] = { b, pm, q, c: C.countPools(b, pm), pub, last: { k: '', s: '', op: 'admin' } };
+      out[m] = Object.assign({ b, pm, q, c: C.countPools(b, pm), pub, last: { k: '', s: '', op: 'admin' } }, monthMeta(m));
     });
     return out;
   }
@@ -344,6 +387,7 @@
       const rows = C.unpack(data.bookings || []);
       G.sheets[C.BOOK] = C.makeSheet(C.BOOK, [BOOK_HEADER].concat(rows));
       G.sheets[C.LOG] = C.makeSheet(C.LOG, [LOG_HEADER]);
+      G.sheets[C.SUBMIT] = C.makeSheet(C.SUBMIT, [SUBMIT_HEADER]);
       cfg = Object.assign({}, cfg || {}, { staffSrc: JSON.stringify(data.staffSrc || []) });
       const ms = {};
       rows.forEach(r => { const m = C.normDate(r[0]).slice(0, 7); if (m) ms[m] = 1; });

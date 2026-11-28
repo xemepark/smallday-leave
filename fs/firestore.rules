@@ -26,7 +26,7 @@ service cloud.firestore {
     match /months/{m} {
       allow read: if isMember();
       allow create, delete: if isAdmin();
-      allow update: if isAdmin() || (isStaff() && staffChange(m));
+      allow update: if isAdmin() || (isStaff() && (staffChange(m) || staffSubmit(m)));
     }
 
     // 劃假狀態：開放＝手動開放、暫停＝手動暫停（都優先於預約時間）；其他＝依預約開放／結束時間
@@ -49,13 +49,49 @@ service cloud.firestore {
         && a.b.diff(b.b).affectedKeys().hasOnly([k])
         && a.c.diff(b.c).affectedKeys().hasOnly([s])
         && (a.last.op == 'add'
-              ? staffAdd(m, a, b, k, s, me, c.staffMap[me])
-              : (a.last.op == 'del' && staffDel(a, b, k, s, me)));
+          ? staffAdd(m, a, b, k, s, me, c.staffMap[me])
+          : (a.last.op == 'del' && staffDel(a, b, k, s, me, c.staffMap[me])));
+    }
+    // 同仁可以自己動的假：自排、許願、事假／病假／特休申請
+    function staffType(t) { return t in ['自排', '許願', '事假申請', '病假申請', '特休申請']; }
+    // 自排、許願要照劃假順序：輪到自己、而且還沒送出
+    function turnOk(t, b, me, st) {
+      let g = st.role + '|' + st.store;
+      let turn = b.get('turn', {});
+      return !(t == '自排' || t == '許願')
+        || (!(me in b.get('sub', {})) && (!(g in turn) || turn[g] == me));
+    }
+    // 送出：只能加自己的送出紀錄、把自己這組換到下一位
+    function staffSubmit(m) {
+      let c = cfg();
+      let me = email();
+      let st = c.staffMap[me];
+      let g = st.role + '|' + st.store;
+      let a = request.resource.data;
+      let b = resource.data;
+      let bs = b.get('sub', {});
+      let as = a.get('sub', {});
+      let bt = b.get('turn', {});
+      let at = a.get('turn', {});
+      return windowOpen(c.window, request.time.toMillis())
+        && a.diff(b).affectedKeys().hasOnly(['sub', 'turn', 'last'])
+        && a.last.op == 'submit'
+        && as.diff(bs).affectedKeys().hasOnly([me]) && (me in as) && !(me in bs)
+        && at.diff(bt).affectedKeys().hasOnly([g])
+        && ((g in bt) ? (bt[g] == me && nextOk(b, g, me, at.get(g, ''))) : !(g in at));
+    }
+    // 下一位：順序裡的下一個人；如果他已經被代送出，可以跳到後面還沒送出的人
+    function nextOk(b, g, me, t) {
+      let list = b.ord[g];
+      let i = b.oi[g][me];
+      let nx = i + 1 < list.size() ? list[i + 1] : '';
+      let sub = b.get('sub', {});
+      return t == nx || ((nx in sub) && (t == '' || ((t in b.oi[g]) && b.oi[g][t] > i + 1 && !(t in sub))));
     }
     function staffAdd(m, a, b, k, s, me, st) {
       let e = a.b[k];
       return !(k in b.b) && (k in a.b)
-        && e.e == me && e.by == me && e.t == '自排'
+        && e.e == me && e.by == me && staffType(e.t) && turnOk(e.t, b, me, st)
         && e.r == st.role && e.st == st.store && e.sl == s
         && k == e.d + '_' + me
         && e.d.matches(m + '-[0-9][0-9]')
@@ -63,10 +99,10 @@ service cloud.firestore {
         && a.c[s] == b.c.get(s, 0) + 1
         && (b.q[s] < 0 || a.c[s] <= b.q[s]);
     }
-    function staffDel(a, b, k, s, me) {
+    function staffDel(a, b, k, s, me, st) {
       let e = b.b[k];
       return (k in b.b) && !(k in a.b)
-        && e.e == me && e.by == me && e.t == '自排' && e.sl == s
+        && e.e == me && e.by == me && staffType(e.t) && turnOk(e.t, b, me, st) && e.sl == s
         && a.c[s] == b.c[s] - 1;
     }
 
