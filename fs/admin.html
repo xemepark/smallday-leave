@@ -42,7 +42,7 @@
   .lv-公排{background:#e6effa;color:#4a7fb5;border:1px solid #4a7fb5}
   .lv-特休{background:var(--ov-bg);color:var(--ov);border:1px solid var(--ov)}
   .lv-other{background:var(--full-bg);color:var(--ink)}
-  .lv-許願{background:#fff;color:#4a7fb5;border:1.5px dashed #4a7fb5}
+  .lv-許願{background:#ffe27a;color:#7a5900;border:1px solid #e3b000}
   .lv-apply{background:#fff;color:var(--ov);border:1.5px dashed var(--ov)}
   .lv-kind{background:var(--ov-bg);color:var(--ov);border:1px solid var(--ov)}
   .card2{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:12px}
@@ -268,7 +268,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s .8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
-<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128a';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128c';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 <div class="wrap">
@@ -1609,7 +1609,7 @@ document.querySelectorAll('input[name=dmode]').forEach(r => r.onchange = syncDay
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js?v=1.0.0"></script>
 <script src="engine-core.js?v=1.2.0"></script>
-<script src="engine.js?v=1.2.0"></script>
+<script src="engine.js?v=1.2.1"></script>
 <script>onGsiLoad();</script>
 </body>
 </html>

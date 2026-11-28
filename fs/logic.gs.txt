@@ -9,7 +9,7 @@
  *           所以只能劃自己的假，不能代填。
  */
 
-const VERSION = '2.5.0';
+const VERSION = '2.5.1';
 const TZ = 'Asia/Taipei';
 const SH = {
   SETTINGS: '設定',
@@ -205,8 +205,8 @@ function book_(me, date, reqType) {
       const w = workCheck_(s, me.role, month, inMonth.filter(b => isMonthOff_(b.type)).map(b => b.date).concat([date]), ctx.holidays,
         inMonth.filter(b => isKind_(b.type)).map(b => b.date));
       if (w.need > w.remaining) {
-        fail_('這樣排的話，' + label_(w.longestStart) + ' 起會連續上班 ' + w.longest + ' 天，剩下的 ' + w.remaining +
-          ' 天休假不夠把每段上班切到 6 天以內（不能連上 7 天），請換一天', 'WORK_STREAK');
+        fail_('這樣排的話，會有連續上班 7 天以上的日子：\n' + runsText_(w.runs) + '\n剩下的 ' + w.remaining +
+          ' 天休假不夠把每段上班都切到 6 天以內（不能連上 7 天），請換一天', 'WORK_STREAK');
       }
     }
 
@@ -389,7 +389,7 @@ function submit_(me, month) {
     }
     const st = streaks7_(month, mine.map(b => b.date), ctx.holidays);
     if (st.length) {
-      fail_('會連續上班 7 天以上，不能送出：\n' + st.map(r => '・' + label_(r[0]) + '～' + label_(r[1]) + '　連上 ' + r[2] + ' 天').join('\n') +
+      fail_('會連續上班 7 天以上，不能送出：\n' + runsText_(st) +
         '\n請調整自排或許願，讓每段上班都在 6 天以內', 'WORK_STREAK7');
     }
     ensureSheet_(SH.SUBMIT, SUBMIT_HEADER_).appendRow([month, me.email, nowStr_(), me.email]);
@@ -517,17 +517,23 @@ function workCheck_(s, role, month, offDates, holidays, extraOff) {
   offDates.forEach(d => { off[d] = true; });
   (extraOff || []).forEach(d => { off[d] = true; });   // 事假／病假／特休：算放假，但不佔每月休假天數
   Object.keys(holidays || {}).forEach(d => { off[d] = true; });
-  let need = 0, run = 0, start = null, longest = 0, longestStart = days[0];
+  let need = 0, run = 0, start = null, prev = null, longest = 0, longestStart = days[0];
+  const runs = [];   // 連續上班 7 天以上的區間 [起, 迄, 天數]
   days.concat(['END']).forEach(d => {
-    if (d !== 'END' && !off[d]) { if (!run) start = d; run++; return; }
+    if (d !== 'END' && !off[d]) { if (!run) start = d; run++; prev = d; return; }
     if (run) {
       need += Math.floor(run / 7);
       if (run > longest) { longest = run; longestStart = start; }
+      if (run >= 7) runs.push([start, prev, run]);
     }
     run = 0;
   });
   const used = offDates.filter((d, i, a) => a.indexOf(d) === i && d.slice(0, 7) === month).length;
-  return { need: need, remaining: Math.max(0, totalOff_(s, role) - used), longest: longest, longestStart: longestStart };
+  return { need: need, remaining: Math.max(0, totalOff_(s, role) - used), longest: longest, longestStart: longestStart, runs: runs };
+}
+/** 把連上 7 天以上的區間列成一行一行 */
+function runsText_(runs) {
+  return runs.map(r => '・' + label_(r[0]) + '～' + label_(r[1]) + '　連上 ' + r[2] + ' 天').join('\n');
 }
 
 /** 這個職務每月可以自排幾天（沒設定＝每月休假天數全部都可以自排） */
@@ -959,7 +965,7 @@ function adminSetLeave_(admin, req) {
         const inM = mine.filter(b => b.date.slice(0, 7) === month && b.date !== date);
         const wk7 = workCheck_(s, p.role, month, inM.filter(b => isMonthOff_(b.type)).map(b => b.date).concat(isKind_(type) ? [] : [date]), ctx.holidays,
           inM.filter(b => isKind_(b.type)).map(b => b.date).concat(isKind_(type) ? [date] : []));
-        if (wk7.need > wk7.remaining) issues.push(label_(wk7.longestStart) + ' 起會連續上班 ' + wk7.longest + ' 天，剩下的休假不夠切到 6 天以內');
+        if (wk7.need > wk7.remaining) issues.push('會連續上班 7 天以上（' + wk7.runs.map(r => label_(r[0]) + '～' + label_(r[1]) + ' 連上 ' + r[2] + ' 天').join('、') + '），剩下的休假不夠切到 6 天以內');
         const run = runLength_(mine.map(b => b.date).concat([date]), date);
         if (run > s.maxConsecutive) issues.push('會連休 ' + run + ' 天（上限 ' + s.maxConsecutive + '）');
         if (issues.length) {

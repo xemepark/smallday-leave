@@ -71,9 +71,9 @@
   .day.mine-mgr{background:var(--mgr-bg);border-color:var(--mgr)} .day.mine-mgr .t{color:var(--mgr);font-weight:700}
   .day.holiday{background:#eaf3ec;border-color:#4f8a5b} .day.holiday .t{color:#4f8a5b;font-weight:700}
   .day.mine-other{background:var(--other-bg);border-color:var(--other)} .day.mine-other .t{color:var(--other);font-weight:700}
-  .day.mine-wish{background:#fff;border:2px dashed var(--mgr)} .day.mine-wish .t{color:var(--mgr);font-weight:700}
+  .day.mine-wish{background:#ffe27a;border:2px solid #e3b000} .day.mine-wish .n{color:#5c4300} .day.mine-wish .t{color:#7a5900;font-weight:700}
   .day.mine-apply{background:#fff;border:2px dashed var(--other)} .day.mine-apply .t{color:var(--other);font-weight:700;font-size:11px}
-  .row.mine-wish{border:2px dashed var(--mgr)} .row.mine-wish .b{color:var(--mgr)}
+  .row.mine-wish{border:2px solid #e3b000} .row.mine-wish .b{background:#ffe27a;color:#7a5900}
   .row.mine-apply{border:2px dashed var(--other)} .row.mine-apply .b{color:var(--other)}
   .turnbox{border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:14px;background:var(--mgr-bg);color:var(--mgr)}
   .turnbox.go{background:var(--ok-bg);color:var(--ok);font-weight:700}
@@ -82,7 +82,7 @@
   .turnbox ol li.turn{color:var(--ok);font-weight:700} .turnbox ol li.me{text-decoration:underline}
   .opts{display:flex;gap:6px;margin-top:8px}
   .opts button{flex:1;border:1.5px solid var(--line);background:var(--card);border-radius:10px;padding:10px 4px;font:inherit;font-size:14px;font-weight:700;cursor:pointer;color:var(--ink)}
-  .opts button.wish{border-color:var(--mgr);color:var(--mgr)}
+  .opts button.wish{border-color:#e3b000;color:#7a5900;background:#fff6d1}
   .opts button.kind{color:var(--other);border-color:var(--other)}
   .opts button.off{background:var(--full-bg);color:var(--sub);border-color:var(--line)}
   .submitbox{margin:14px 0 6px}
@@ -151,7 +151,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--leave);border-radius:50%;animation:s 0.8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
-<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128a';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128c';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 
@@ -189,7 +189,7 @@
     <div class="legend">
       <span><i style="background:var(--leave)"></i>我的排休</span>
       <span><i style="background:var(--mgr-bg);border:1px solid var(--mgr)"></i>公排</span>
-      <span><i style="background:#fff;border:1.5px dashed var(--mgr)"></i>許願</span>
+      <span><i style="background:#ffe27a;border:1px solid #e3b000"></i>許願</span>
       <span><i style="background:#fff;border:1.5px dashed var(--other)"></i>請假待審</span>
       <span><i style="background:var(--ok-bg);border:1px solid var(--ok)"></i>還有名額</span>
       <span><i style="background:var(--full-bg)"></i>額滿／禁休</span>
@@ -383,7 +383,8 @@ async function act(action, date, type){
     toast(data.message || '完成');
     closeSheet();
   } catch(e){
-    handleError(e);
+    if (e.code === 'WORK_STREAK') { closeSheet(); showAlert('這天不能排：會連續上班 7 天以上', e.message); }
+    else handleError(e);
     if (state.token && e.code !== 'AUTH') load(false); // 失敗就立刻更新名額
   } finally { setBusy(false); }
 }
@@ -702,7 +703,7 @@ $('#onlyMine').addEventListener('change', () => { if (state.data) renderList(sta
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js?v=1.0.0"></script>
 <script src="engine-core.js?v=1.2.0"></script>
-<script src="engine.js?v=1.2.0"></script>
+<script src="engine.js?v=1.2.1"></script>
 <script>onGsiLoad();</script>
 </body>
 </html>
