@@ -9,7 +9,7 @@
  *           所以只能劃自己的假，不能代填。
  */
 
-const VERSION = '2.6.1';
+const VERSION = '2.6.2';
 const TZ = 'Asia/Taipei';
 const SH = {
   SETTINGS: '設定',
@@ -281,11 +281,14 @@ function ensureSheet_(name, header) {
 const ORDER_HEADER_ = ['月份', '職務', '門市', '順序（Email，用逗號分隔）'];
 const SUBMIT_HEADER_ = ['月份', 'Email', '送出時間', '操作者'];
 
+/** 各門市自己的順序先停用，只用「全公司」順序（改成 true 就恢復門市順序） */
+var ORDER_BY_STORE_ = false;
 /** 管理員設定的順序：{ '職務|門市': [email…] }（有設定的組才會照順序） */
 function getOrders_(month) {
   const out = {};
   optRows_(SH.ORDER).forEach(r => {
     if (toMonth_(r[0]) !== month) return;
+    if (!ORDER_BY_STORE_ && String(r[2]).trim() !== '全公司') return;
     const g = String(r[1]).trim() + '|' + String(r[2]).trim();
     out[g] = String(r[3] || '').split(/[,，\s]+/).map(normEmail_).filter(Boolean);
   });
@@ -424,6 +427,7 @@ function adminSetOrder_(admin, req) {
   const month = toMonth_(req.month);
   const role = String(req.role || '').trim(), store = String(req.store || '').trim();
   if (!month || !role || !store) fail_('請選月份、職務、門市', 'BAD_REQUEST');
+  if (!ORDER_BY_STORE_ && store !== ALL_STORES_) fail_('目前只開放「全公司」的劃假順序', 'BAD_REQUEST');
   const emails = Array.isArray(req.emails) ? req.emails.map(normEmail_).filter(e => e && e !== FREE_MARK_) : null;
   if (emails && req.free) {
     if (!emails.length) fail_('至少要指定一位排順序的同仁', 'BAD_REQUEST');
@@ -914,7 +918,7 @@ function rosterOrders_(month, staff) {
   const orders = getOrders_(month), subs = getSubmits_(month);
   const out = {};
   const groups = {};
-  staff.forEach(p => { if (p.email && p.role && p.store) { groups[p.role + '|' + ALL_STORES_] = 1; groups[p.role + '|' + p.store] = 1; } });
+  staff.forEach(p => { if (p.email && p.role && p.store) { groups[p.role + '|' + ALL_STORES_] = 1; if (ORDER_BY_STORE_) groups[p.role + '|' + p.store] = 1; } });
   Object.keys(groups).forEach(g => {
     const list = groupOrder_(g, orders, staff, true);
     const q = groupOrder_(g, orders, staff);
