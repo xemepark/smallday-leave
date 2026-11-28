@@ -9,7 +9,7 @@
  *           所以只能劃自己的假，不能代填。
  */
 
-const VERSION = '2.6.3';
+const VERSION = '2.7.0';
 const TZ = 'Asia/Taipei';
 const SH = {
   SETTINGS: '設定',
@@ -166,7 +166,7 @@ function book_(me, date, reqType) {
     const mine = ctx.bookings.filter(b => b.email === me.email);
     if (mine.some(b => b.date === date)) fail_('這天你已經有排休了', 'DUPLICATE');
     const mm = Number(month.slice(5)) + ' 月';
-    if (!kind) assertMyTurn_(me, month);
+    assertMyTurn_(me, month, !!kind);
 
     // 指定假天數、週末上限都是「每個月」各自計算
     const myLeave = mine.filter(b => b.type === LEAVE && b.date.slice(0, 7) === month);
@@ -247,7 +247,7 @@ function cancel_(me, date) {
       }
     }
     if (row < 0) fail_('找不到你這天的排休（公排、已放行的假請洽主管調整）', 'NOT_FOUND');
-    if (!isApply_(t)) assertMyTurn_(me, date.slice(0, 7));
+    assertMyTurn_(me, date.slice(0, 7), isApply_(t));
     sh.deleteRow(row);
     if (freshBookRows_()) freshBookRows_().splice(row - 2, 1);
     log_(me, '取消', date);
@@ -337,19 +337,21 @@ function monthMeta_(month) {
   return { ord: ord, oi: oi, turn: turn, sub: sub };
 }
 /** 自排／許願：有設定順序的話，要輪到自己、而且還沒送出 */
-function assertMyTurn_(me, month) {
+/** kind＝事假／病假／特休申請：送出後還可以申請，但還沒輪到時一樣不能動 */
+function assertMyTurn_(me, month, kind) {
   const subs = getSubmits_(month);
-  if (subs[me.email]) fail_('你 ' + Number(month.slice(5)) + ' 月已經送出了，要修改請洽主管', 'SUBMITTED');
+  if (subs[me.email]) {
+    if (kind) return;
+    fail_('你 ' + Number(month.slice(5)) + ' 月已經送出了，要修改請洽主管', 'SUBMITTED');
+  }
   const orders = getOrders_(month);
   const g = myGroup_(me, orders);
   if (!orders[g]) return;
   const list = groupOrder_(g, orders, getStaff_());
   const t = list.find(e => !subs[e]) || '';
   if (t && t !== me.email) {
-    const who = getStaff_().find(p => normEmail_(p.email) === t);
-    const i = list.indexOf(me.email);
-    fail_('還沒輪到你劃假，目前輪到 ' + (who ? who.name : t) +
-      (i >= 0 ? '（你排第 ' + (i + 1) + ' 位）' : '（指定順序的人都送出後，就開放大家自由劃）'), 'NOT_YOUR_TURN');
+    // 還沒輪到的人不告訴他順序，只說還沒對他開放
+    fail_(Number(month.slice(5)) + ' 月劃假還沒對你開放，開放後就可以劃假和請假', 'NOT_YOUR_TURN');
   }
 }
 function turnView_(me, month) {
@@ -365,6 +367,8 @@ function turnView_(me, month) {
   const nameOf = e => { const p = staff.find(x => normEmail_(x.email) === e); return p ? p.name + (all && p.store ? '（' + p.store + '）' : '') : e; };
   out.free = orderFree_(orders, g);
   out.freeNow = out.free && !t;
+  out.waiting = !out.submitted && !!t && t !== me.email;   // 還沒輪到：同仁畫面整個先不給看
+  if (out.waiting) return { active: true, waiting: true, submitted: false };
   out.myIndex = list.indexOf(me.email) + 1;
   out.total = list.length;
   out.isMyTurn = t === me.email || !t;

@@ -77,6 +77,8 @@
   .row.mine-apply{border:2px dashed var(--other)} .row.mine-apply .b{color:var(--other)}
   .testbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;background:#ffe9e6;border:1.5px solid #c8553d;color:#8a2e1c;border-radius:12px;padding:8px 10px;margin-bottom:10px;font-size:13px}
   .testbar select,.testbar button{font:inherit;font-size:13px;border:1px solid #c8553d;border-radius:8px;padding:4px 8px;background:#fff;color:#8a2e1c;max-width:100%}
+  .waitbox{text-align:center;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px 18px;margin:6px 0 14px}
+  .waitbox .ic{font-size:34px} .waitbox b{display:block;font-size:18px;margin:6px 0} .waitbox p{color:var(--sub);font-size:14px;margin:0 0 14px}
   .turnbox{border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:14px;background:var(--mgr-bg);color:var(--mgr)}
   .turnbox.go{background:var(--ok-bg);color:var(--ok);font-weight:700}
   .turnbox.done{background:var(--full-bg);color:var(--sub)}
@@ -153,7 +155,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--leave);border-radius:50%;animation:s 0.8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
-<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128j';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128k';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 
@@ -182,7 +184,9 @@
 
     <div id="status" class="status"></div>
     <div id="turnBox" class="turnbox hidden"></div>
+    <div id="waitBox" class="waitbox hidden"><div class="ic">🔒</div><b id="waitTitle"></b><p>開放後就可以進來劃假、許願和請假，請晚一點再回來看看。</p><button class="btn" id="waitReload">重新整理</button></div>
 
+    <div id="mainArea">
     <div class="counts">
       <div class="count"><small id="cLeaveLabel">自排</small><b id="cLeave">0</b><span id="cLeaveMax"></span></div>
       <div class="count" id="cWishBox"><small>許願（主管決定）</small><b id="cWish">0</b><span id="cWishMax"></span><small id="cWishMgr" class="hidden" style="display:block;margin-top:4px;color:var(--mgr)"></small></div>
@@ -212,6 +216,7 @@
       <div class="streak hidden" id="streakBox"></div>
       <button class="btn primary" id="submitBtn">送出</button>
       <div class="hint" id="submitHint"></div>
+    </div>
     </div>
 
     <footer id="foot"></footer>
@@ -461,6 +466,15 @@ function render(d){
   $('#cWishMgr').textContent = mgrN ? '主管已排公排 ' + mgrN + ' 天' : '';
   $('#cWishMgr').classList.toggle('hidden', !mgrN);
   renderTurn(d);
+  // 還沒輪到：整個畫面先不給看，只說還沒對他開放
+  const waiting = !!(d.turn && d.turn.waiting);
+  $('#waitBox').classList.toggle('hidden', !waiting);
+  $('#mainArea').classList.toggle('hidden', waiting);
+  if (waiting){
+    $('#waitTitle').textContent = Number(m) + ' 月劃假還沒對你開放';
+    $('#status').classList.add('hidden');
+    if (state.sel) closeSheet();
+  } else $('#status').classList.remove('hidden');
   $('#cLeave').textContent = d.counts.leave;
   $('#cLeaveMax').textContent = ' / ' + d.limits.maxLeave + ' 天';
   $('#cWeekendBox').classList.toggle('hidden', !d.limits.weekendCapped);
@@ -645,7 +659,7 @@ function fillSheet(date){
 function renderTurn(d){
   const box = $('#turnBox'), tv = d.turn || {};
   box.textContent = '';
-  if (!tv.active && !tv.submitted){ box.classList.add('hidden'); return; }
+  if ((!tv.active && !tv.submitted) || tv.waiting){ box.classList.add('hidden'); return; }
   box.classList.remove('hidden');
   if (tv.submitted){ box.className = 'turnbox done'; box.textContent = '你 ' + Number(d.month.slice(5)) + ' 月的排休已經送出' + (tv.submittedAt ? '（' + tv.submittedAt + '）' : '') + '，要修改請洽主管'; return; }
   if (tv.freeNow){ box.className = 'turnbox go'; box.textContent = '指定順序的同仁都送出了，現在開放大家自由劃假，先劃先贏！排好後記得按最下面的「送出」'; }
@@ -680,6 +694,7 @@ function showAlert(title, msg){
   $('#alertBox').classList.add('show');
 }
 $('#alertOk').addEventListener('click', () => $('#alertBox').classList.remove('show'));
+$('#waitReload').addEventListener('click', () => { if (!state.busy) load(false); });
 $('#submitBtn').addEventListener('click', async () => {
   const d = state.data; if (!d || state.busy) return;
   const tv = d.turn || {};
