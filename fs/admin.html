@@ -105,6 +105,7 @@
   .chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 14px;cursor:pointer;font:inherit;color:var(--ink)}
   .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
   .tag{font-size:12px;color:var(--sub)} .tag.warn{color:#9a5b00;background:#fff6d1;border-radius:8px;padding:6px 8px;margin:4px 0}
+  .timebox{margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg)} .timebox > label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
   .secthd{margin:18px 0 4px;padding-top:14px;border-top:2px dashed var(--line);font-size:13px;font-weight:700;color:var(--accent)}
   .ordmonths{display:flex;gap:6px;margin:6px 0} .ordmonths button{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:999px;padding:4px 12px;background:var(--card)} .ordmonths button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
   .testadm{background:#fff3f0;border:1.5px solid #c8553d;border-radius:14px;padding:10px 12px;margin-bottom:12px;display:grid;gap:8px;font-size:14px}
@@ -275,7 +276,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s .8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
-<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128n';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128o';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 <div class="wrap">
@@ -390,21 +391,19 @@
   <div class="preview" id="sPreview"></div>
 
   <div class="field">
-    <label>預約開放／結束時間（「依預約時間」時才會生效）</label>
-    <div class="grid2">
-      <div><input class="text" type="datetime-local" id="sOpen"><div class="subnote">自動開放</div></div>
-      <div><input class="text" type="datetime-local" id="sClose"><div class="subnote">自動結束</div></div>
-    </div>
-    <div class="subnote">手動開放或手動暫停時，可以留白；切回「依預約時間」前要填好。</div>
-  </div>
-
-  <div class="field">
     <label>劃假狀態</label>
     <div class="mstate" id="sModeNow"><i></i><div><b></b><small></small></div></div>
     <div class="seg seg3" id="sMode" style="margin-top:8px">
       <button type="button" data-m="自動">依預約時間</button><button type="button" data-m="開放">手動開放</button><button type="button" data-m="暫停">手動暫停</button>
     </div>
     <div class="subnote" id="sModeNote"></div>
+    <div class="timebox hidden" id="sTimeField">
+      <label>預約時間</label>
+      <div class="grid2">
+        <div><input class="text" type="datetime-local" id="sOpen"><div class="subnote">自動開放</div></div>
+        <div><input class="text" type="datetime-local" id="sClose"><div class="subnote">自動結束</div></div>
+      </div>
+    </div>
   </div>
 
   <div class="field">
@@ -1529,6 +1528,8 @@ const MODE_NOTE = {
 function paintSMode(){
   document.querySelectorAll('#sMode button').forEach(b => b.classList.toggle('on', b.dataset.m === state.sMode));
   $('#sModeNote').textContent = MODE_NOTE[state.sMode] || '';
+  // 預約時間只有選「依預約時間」才出現
+  $('#sTimeField').classList.toggle('hidden', state.sMode !== '自動');
 }
 const MODE_LABEL = { '自動': '依預約時間', '開放': '手動開放', '暫停': '手動暫停' };
 async function setMode(m){
