@@ -46,7 +46,6 @@
   .lv-apply{background:#fff;color:var(--ov);border:1.5px dashed var(--ov)}
   .lv-kind{background:var(--ov-bg);color:var(--ov);border:1px solid var(--ov)}
   .card2{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:12px}
-  .rrow .rg{display:inline-flex;align-items:center;gap:4px;margin-right:10px} .rrow .rg small{color:var(--sub)}
   .rulesum .rs{display:flex;gap:8px;font-size:14px;padding:4px 0;border-top:1px dashed var(--line)} .rulesum .rs b{min-width:56px} .rulesum .rs span{color:var(--sub)}
   .rsbtn{margin-top:8px;font:inherit;font-size:14px;border:1px solid var(--accent);color:var(--accent);background:var(--card);border-radius:10px;padding:7px 12px;cursor:pointer}
   .steph{margin:4px 0 8px;font-size:15px} .steph small{color:var(--sub);font-weight:400;margin-left:6px;font-size:13px}
@@ -280,7 +279,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s .8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
-<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128u';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128v';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 <div class="wrap">
@@ -367,8 +366,8 @@
   <div class="field">
     <label>套用範圍</label>
     <div class="radio">
-      <label><input type="radio" name="scope" value="store" checked><span><b id="scopeStoreLabel"></b><small>只改這一區（北部＝台北、中壢、楊梅、竹北合算）</small></span></label>
-      <label><input type="radio" name="scope" value="all"><span><b>北部和台中都改</b><small>兩區各自都改成這個數字</small></span></label>
+      <label><input type="radio" name="scope" value="store" checked><span><b id="scopeStoreLabel"></b><small>只改這間門市，名額由這間店自己算</small></span></label>
+      <label><input type="radio" name="scope" value="all"><span><b>所有門市</b><small>每間店都改成這個數字；原本是合計的，就改合計人數</small></span></label>
     </div>
   </div>
 
@@ -444,7 +443,7 @@
 
   <div class="field">
     <label>劃假順序與送出狀況</label>
-    <div class="subnote">順序會同時套用到所有開放劃假的月份，還沒輪到的人哪個月份都不能劃；送出狀況每個月分開看。</div>
+    <div class="subnote">每個職務可以選「不分門店」（例如業務跨區，全公司抽籤排一條），或「分門店」（每間店各排各的）。同一個職務兩種都設時，以「不分門店」為準。順序會同時套用到所有開放劃假的月份，還沒輪到的人哪個月份都不能劃；送出狀況每個月分開看。</div>
     <div class="ordmonths" id="orderMonths"></div>
     <div id="orderIn"></div>
   </div>
@@ -549,7 +548,7 @@
 
 <div id="rulesPanel" class="modal" role="dialog" aria-modal="true">
   <h2>預設規則：各職務每天可休幾人</h2>
-  <div class="meta">勾選的職務每天休假有人數限制；沒勾的職務每天不限人數（每人每月自排、週末、連休上限照算）。<b>北部</b>＝台北、中壢、楊梅、竹北合算一份名額，<b>台中</b>自己一份。某一天要例外，儲存後在名額設定的表格點那一格改。</div>
+  <div class="meta">勾選的職務每天休假有人數限制；沒勾的職務每天不限人數（每人每月自排、週末、連休上限照算）。某一天要例外，儲存後在名額設定的表格點那一格改。</div>
   <div id="rList"></div>
   <div class="btns" style="margin-top:12px">
     <button class="btn ghost" id="rCancel">取消</button>
@@ -767,7 +766,15 @@ function renderOrder(r){
   const nameOf = e => { const p = r.people.find(x => x.key === e); return p ? p.name + (og0.all && p.store ? '（' + p.store + '）' : '') : e; };
   const bar = el('div', 'ordbar');
   const sel = el('select');
-  groups.forEach(g => { const o = el('option', '', g.split('|')[1] + ' ' + g.split('|')[0] + (r.orders[g].active ? '（照順序）' : r.orders[g].overridden ? '（照全公司）' : '')); o.value = g; sel.appendChild(o); });
+  // 依職務分組：每個職務可以選「不分門店（全公司一起排）」或「分門店（每間店各排各的）」
+  let og2 = null, lastRole = '';
+  groups.forEach(g => {
+    const [role, st] = g.split('|');
+    if (role !== lastRole){ og2 = document.createElement('optgroup'); og2.label = role; sel.appendChild(og2); lastRole = role; }
+    const flag = r.orders[g].active ? '（照順序）' : r.orders[g].overridden ? '（照全公司）' : '';
+    const o = el('option', '', (st === '全公司' ? role + '・不分門店（全公司一起排）' : role + '・分門店：' + st) + flag);
+    o.value = g; og2.appendChild(o);
+  });
   sel.value = state.oGroup;
   sel.onchange = () => { state.oGroup = sel.value; state.oDraft = null; renderOrder(r); };
   bar.appendChild(sel);
@@ -780,8 +787,8 @@ function renderOrder(r){
   bar.appendChild(save);
   if (og.active){ const off = el('button', '', '取消順序（大家都能劃）'); off.onclick = () => orderAct({ emails: null }); bar.appendChild(off); }
   box.appendChild(bar);
-  if (og.overridden) box.appendChild(el('div', 'tag warn', '這個職務已經啟用「全公司」順序，同仁會照全公司那條輪；這裡的門市順序先不管，取消全公司順序後才會恢復。'));
-  else if (og.all && !og.active) box.appendChild(el('div', 'tag', '全公司順序：所有門市的這個職務排成一條，一次只有一個人能劃。啟用後，各門市的順序先暫停。'));
+  if (og.overridden) box.appendChild(el('div', 'tag warn', '這個職務已經啟用「不分門店」的順序，同仁會照全公司那條輪；這裡的門市順序先不管，取消「不分門店」的順序後才會恢復。'));
+  else if (og.all && !og.active) box.appendChild(el('div', 'tag', '不分門店：所有門市的這個職務排成一條（適合跨區的職務，例如業務），一次只有一個人能劃。啟用後，這個職務各門市的順序先暫停。'));
   box.appendChild(el('div', 'tag', og.active ? '輪到的人按「送出」後才換下一位；卡住的話可以按「代送出」。' : '還沒啟用：這組同仁現在不用排隊。用 ↑↓ 排好順序後按「啟用」。'));
   box.appendChild(el('div', 'tag', '只想指定部分人：按「不排」把人移到下面的「自由搶」區，指定的人都送出後，自由搶區的人才開放一起搶。'));
   const ol = el('ul', 'ol');
@@ -1092,7 +1099,7 @@ function openPanel(role, i){
     rb.textContent = '恢復預設（刪除這個特別設定）';
     const parts = [];
     if (!c.override.role) parts.push('所有職位');
-    if (!c.override.store) parts.push('北部和台中');
+    if (!c.override.store) parts.push('所有門市');
     rw.classList.toggle('hidden', !parts.length);
     rw.textContent = parts.length ? '注意：這個特別設定套用在' + parts.join('、') + '，恢復預設會一起恢復。' : '';
   } else { rb.classList.add('hidden'); rw.classList.add('hidden'); }
@@ -1349,22 +1356,19 @@ function showPickConfirm(job, msg){
 
 /* ===== 職務與每日名額 ===== */
 const DAYS3 = [['平日', '平日'], ['六', '週六'], ['日', '週日']];
-/** 某職務、某日別、某一區的預設名額（跟後端 slot_ 一樣挑第一條符合的規則） */
-function regionRule(d, role, dt, region){
-  const rep = ((d.regionStores || {})[region] || [region])[0];
-  return d.rulesConfig.rules.find(r => r.role === role && r.dayType === dt && (!r.stores.length || r.stores.indexOf(rep) >= 0)) || null;
-}
 function buildRulesModel(){
-  const d = state.data, model = {};
+  const d = state.data, rc = d.rulesConfig, model = {};
   d.roles.forEach(role => {
     model[role] = {};
     DAYS3.forEach(([dt]) => {
-      const m = {};
-      d.stores.forEach(rg => { const r = regionRule(d, role, dt, rg); m[rg] = r ? r.quota : 1; });
+      const rs = rc.rules.filter(r => r.role === role && r.dayType === dt);
+      const primary = rs.find(r => r.scope === '合計') || rs.find(r => !r.stores.length) || rs[0];
+      const m = { scope: primary && primary.scope === '合計' ? '合計' : '各門市', quota: primary ? primary.quota : 1, ex: [] };
+      rs.filter(r => r !== primary).forEach(r => r.stores.forEach(st => m.ex.push({ store: st, quota: r.quota })));
       model[role][dt] = m;
     });
   });
-  state.rm = { controlled: new Set(d.rulesConfig.controlled), model };
+  state.rm = { controlled: new Set(rc.controlled), model };
 }
 /** 名額設定上方的「預設規則」摘要 */
 function renderRuleSum(d){
@@ -1373,15 +1377,16 @@ function renderRuleSum(d){
   const rc = d.rulesConfig, ctl = new Set(rc.controlled), free = [];
   d.roles.forEach(role => {
     if (!ctl.has(role)){ free.push(role); return; }
-    const parts = DAYS3.map(([dt, label]) => label + ' ' + d.stores.map(rg => { const r = regionRule(d, role, dt, rg); return rg + ' ' + (r ? r.quota : '－'); }).join('、'));
+    const parts = DAYS3.map(([dt, label]) => {
+      const rs = rc.rules.filter(r => r.role === role && r.dayType === dt);
+      const pr = rs.find(r => r.scope === '合計') || rs.find(r => !r.stores.length) || rs[0];
+      if (!pr) return label + ' －';
+      const ex = rs.filter(r => r !== pr).map(r => r.stores.join('、') + ' ' + r.quota);
+      return label + ' ' + (pr.scope === '合計' ? '全公司合計 ' : '每店 ') + pr.quota + ' 人' + (ex.length ? '（' + ex.join('；') + '）' : '');
+    });
     const row = el('div', 'rs'); row.appendChild(el('b', '', role)); row.appendChild(el('span', '', parts.join('・'))); box.appendChild(row);
   });
   if (free.length){ const row = el('div', 'rs'); row.appendChild(el('b', '', '不限人數')); row.appendChild(el('span', '', free.join('、'))); box.appendChild(row); }
-  // 還有舊的規則（全公司合計、各門市各自算）→ 提醒按一次儲存改成兩區
-  const rs = d.regionStores || {}, key = a => (a || []).slice().sort().join(',');
-  const regionKeys = Object.keys(rs).map(r => key(rs[r]));
-  const legacy = rc.rules.some(r => ctl.has(r.role) && (r.scope !== '合計' || regionKeys.indexOf(key(r.stores)) < 0));
-  if (legacy){ const w = el('div', 'tag warn', '目前還有舊的規則（例如「全公司合計」其實把台中也算進去）。按「編輯預設規則」→「儲存」一次，就會改成北部、台中兩區各自一份名額。'); box.appendChild(w); }
 }
 function openRules(){
   buildRulesModel(); renderRules();
@@ -1396,6 +1401,7 @@ function miniStepper(get, set){
 }
 function renderRules(){
   const box = $('#rList'); box.textContent = '';
+  const stores = state.data.stores;
   state.data.roles.forEach(role => {
     const on = state.rm.controlled.has(role);
     const card = el('div', 'rcard' + (on ? '' : ' off'));
@@ -1410,11 +1416,25 @@ function renderRules(){
         const m = state.rm.model[role][dt];
         const row = el('div', 'rrow');
         row.appendChild(el('b', '', label));
-        state.data.stores.forEach(rg => {
-          const w = el('span', 'rg'); w.appendChild(el('small', '', rg));
-          w.appendChild(miniStepper(() => m[rg], v => { m[rg] = v; }));
-          row.appendChild(w);
+        const sel = el('select');
+        [['各門市', '每間門市各自算'], ['合計', '全公司合計']].forEach(([v, t]) => { const o = el('option', '', t); o.value = v; sel.appendChild(o); });
+        sel.value = m.scope; sel.onchange = () => { m.scope = sel.value; };
+        row.appendChild(sel);
+        row.appendChild(miniStepper(() => m.quota, v => { m.quota = v; }));
+        const exl = el('div', 'exl');
+        m.ex.forEach((x, i) => {
+          const chip = el('span', 'ex');
+          const ss = el('select'); stores.forEach(st => { const o = el('option', '', st); o.value = st; ss.appendChild(o); });
+          ss.value = x.store; ss.onchange = () => { x.store = ss.value; };
+          chip.append(ss, '另計');
+          chip.appendChild(miniStepper(() => x.quota, v => { x.quota = v; }));
+          const rm = el('button', 'x', '✕'); rm.title = '移除'; rm.onclick = () => { m.ex.splice(i, 1); renderRules(); };
+          chip.appendChild(rm); exl.appendChild(chip);
         });
+        const add = el('button', 'add', '＋ 某間門市另外算');
+        add.onclick = () => { const used = m.ex.map(x => x.store); m.ex.push({ store: stores.find(st => used.indexOf(st) < 0) || stores[0], quota: 1 }); renderRules(); };
+        exl.appendChild(add);
+        row.appendChild(exl);
         body.appendChild(row);
       });
       card.appendChild(body);
@@ -1424,11 +1444,14 @@ function renderRules(){
 }
 async function saveRules(){
   if (state.busy) return;
-  const d = state.data, rules = [];
-  for (const role of d.roles){
-    for (const [dt] of DAYS3){
+  const stores = state.data.stores, rules = [];
+  for (const role of state.data.roles){
+    for (const [dt, label] of DAYS3){
       const m = state.rm.model[role][dt];
-      d.stores.forEach(rg => rules.push({ role, dayType: dt, scope: '合計', stores: (d.regionStores || {})[rg] || [rg], quota: m[rg], note: rg + '合計' }));
+      const exStores = m.ex.map(x => x.store);
+      if (new Set(exStores).size !== exStores.length){ toast(role + ' ' + label + '：同一間門市重複了', true); return; }
+      rules.push({ role, dayType: dt, scope: m.scope, stores: exStores.length ? stores.filter(st => exStores.indexOf(st) < 0) : [], quota: m.quota, note: '' });
+      m.ex.forEach(x => rules.push({ role, dayType: dt, scope: '各門市', stores: [x.store], quota: x.quota, note: '' }));
     }
   }
   const controlled = state.data.roles.filter(r => state.rm.controlled.has(r));

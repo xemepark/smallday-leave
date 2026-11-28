@@ -9,7 +9,7 @@
  *           所以只能劃自己的假，不能代填。
  */
 
-const VERSION = '2.9.0';
+const VERSION = '2.9.1';
 const TZ = 'Asia/Taipei';
 const SH = {
   SETTINGS: '設定',
@@ -341,8 +341,8 @@ function ensureSheet_(name, header) {
 const ORDER_HEADER_ = ['月份', '職務', '門市', '順序（Email，用逗號分隔）'];
 const SUBMIT_HEADER_ = ['月份', 'Email', '送出時間', '操作者'];
 
-/** 各門市自己的順序先停用，只用「全公司」順序（改成 true 就恢復門市順序） */
-var ORDER_BY_STORE_ = false;
+/** 劃假順序：每個職務可以「分門店」（各門市一條）或「不分門店」（全公司一條，優先）；改成 false 就只用全公司順序 */
+var ORDER_BY_STORE_ = true;
 /** 管理員設定的順序：{ '職務|門市': [email…] }（有設定的組才會照順序） */
 function getOrders_(month) {
   const out = {};
@@ -853,14 +853,11 @@ function adminView_(admin, month) {
   const ctx = readContext_(month);
   const roles = roleList_(ctx.rules);
   const days = monthDays_(month);
-  // 名額表只分「北部、台中」兩區：每區用一間代表門市算（同一區的名額合算）
-  const regions = regionsOf_(s.stores);
   const grid = {};
-  regions.forEach(region => {
-    const store = regionStores_(s.stores, region)[0];
-    grid[region] = {};
+  s.stores.forEach(store => {
+    grid[store] = {};
     roles.forEach(role => {
-      grid[region][role] = days.map(date => {
+      grid[store][role] = days.map(date => {
         const sl = slot_(ctx, { role: role, store: store }, date);
         return {
           quota: sl.quota,
@@ -891,9 +888,7 @@ function adminView_(admin, month) {
     },
     days: days.map(d => dayInfo_(ctx, d)),
     roles: roles,
-    stores: regions,
-    regionStores: regions.reduce((o, r) => { o[r] = regionStores_(s.stores, r); return o; }, {}),
-    allStores: s.stores,
+    stores: s.stores,
     grid: grid,
     serverTime: nowStr_()
   };
