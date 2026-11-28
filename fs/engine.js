@@ -13,7 +13,7 @@
 (function () {
   'use strict';
   const C = window.LeaveCore;
-  const FS_VERSION = '1.3.1';
+  const FS_VERSION = '1.3.2';
   const OWNER = 'xemepark@gmail.com';
   const BOOK_HEADER = ['日期', 'Email', '姓名', '職位', '門市', '類型', '建立時間', '建立者'];
   const LOG_HEADER = ['時間', 'Email', '姓名', '動作', '內容'];
@@ -408,11 +408,29 @@
     const enc = o => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     return enc({ alg: 'none' }) + '.' + enc({ email, exp: Math.floor(Date.now() / 1000) + 3500 }) + '.fs';
   }
+  function openInBrowserTip() {
+    if (document.getElementById('fsOpenTip')) return;
+    const url = location.href.split('#')[0];
+    const w = document.createElement('div');
+    w.id = 'fsOpenTip';
+    w.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(40,30,25,.55);display:flex;align-items:center;justify-content:center;padding:20px';
+    w.innerHTML = '<div style="background:#fffaf5;border-radius:18px;padding:18px;max-width:420px;font-size:15px;color:#3a2e28;line-height:1.6">' +
+      '<b style="font-size:17px">這個 App 裡沒辦法登入 Google</b>' +
+      '<p style="margin:8px 0 12px">請改用 <b>Safari</b> 或 <b>Chrome</b> 打開：按右上角「分享／⋯」選「在 Safari 中打開」，或複製下面的網址貼到 Safari。</p>' +
+      '<div style="display:flex;gap:6px"><input readonly style="flex:1;min-width:0;font:inherit;font-size:13px;border:1px solid #e4d8cc;border-radius:10px;padding:8px">' +
+      '<button type="button" data-copy style="font:inherit;border:0;background:#c8553d;color:#fff;border-radius:10px;padding:8px 12px">複製</button></div>' +
+      '<button type="button" data-close style="font:inherit;margin-top:12px;width:100%;border:1px solid #e4d8cc;background:#fff;border-radius:10px;padding:9px">知道了</button></div>';
+    document.body.appendChild(w);
+    const inp = w.querySelector('input'); inp.value = url;
+    w.querySelector('[data-copy]').onclick = () => { inp.select(); try { navigator.clipboard.writeText(url); } catch (e) { document.execCommand('copy'); } w.querySelector('[data-copy]').textContent = '已複製'; };
+    w.querySelector('[data-close]').onclick = () => w.remove();
+  }
   function signIn() {
     const p = new firebase.auth.GoogleAuthProvider();
     p.setCustomParameters({ prompt: 'select_account' });
     auth.signInWithPopup(p).catch(e => {
-      if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment')) auth.signInWithRedirect(p);
+      // App 內建的瀏覽器（LINE、Claude…）常擋登入視窗；改跳轉登入在這些瀏覽器也會失敗，直接請他改用 Safari／Chrome
+      if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment' || e.code === 'auth/web-storage-unsupported')) openInBrowserTip();
       else if (e && e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') alert('登入失敗：' + (e.message || e.code));
     });
   }
