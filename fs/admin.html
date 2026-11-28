@@ -273,7 +273,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s .8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
-<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128h';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128i';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 <div class="wrap">
@@ -642,6 +642,7 @@ function renderTestAdm(fs){
   box.querySelectorAll('.seg2 button').forEach(b => b.classList.toggle('on', (b.dataset.t === '1') === !!fs.test));
   $('#tModeNote').textContent = fs.test ? '測試模式中：管理員可以模擬任何一位同仁。正式開放前記得切回上線模式，並清掉測試時劃的假。' : '上線模式：大家只能用自己的身分。要讓管理員模擬同仁測試，切到測試模式。';
   $('#tActRow').classList.toggle('hidden', !fs.test);
+  if (window.LeaveFS) LeaveFS.maybePickActAs(fs);
   const sel = $('#tStaff');
   if (fs.test && !sel.options.length && window.LeaveFS){
     LeaveFS.staffList().sort((a, b) => (a.store + a.role + a.name).localeCompare(b.store + b.role + b.name, 'zh-Hant'))
@@ -1668,7 +1669,7 @@ document.querySelectorAll('input[name=dmode]').forEach(r => r.onchange = syncDay
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js?v=1.0.0"></script>
 <script src="engine-core.js?v=1.2.0"></script>
-<script src="engine.js?v=1.3.0"></script>
+<script src="engine.js?v=1.3.1"></script>
 <script>onGsiLoad();</script>
 </body>
 </html>

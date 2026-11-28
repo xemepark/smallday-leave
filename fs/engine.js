@@ -13,7 +13,7 @@
 (function () {
   'use strict';
   const C = window.LeaveCore;
-  const FS_VERSION = '1.3.0';
+  const FS_VERSION = '1.3.1';
   const OWNER = 'xemepark@gmail.com';
   const BOOK_HEADER = ['日期', 'Email', '姓名', '職位', '門市', '類型', '建立時間', '建立者'];
   const LOG_HEADER = ['時間', 'Email', '姓名', '動作', '內容'];
@@ -312,6 +312,43 @@
     try { await saveAll(); } catch (e) {}
   }
 
+  const PICKED_KEY = 'fsActPicked';
+  function showPicker(fs) {
+    const list = window.LeaveFS.staffList().sort((x, y) => (x.store + x.role + x.name).localeCompare(y.store + y.role + y.name, 'zh-Hant'));
+    const wrap = document.createElement('div');
+    wrap.id = 'fsPick';
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(40,30,25,.55);display:flex;align-items:flex-end;justify-content:center';
+    wrap.innerHTML = '<div style="background:#fffaf5;width:min(480px,100%);max-height:88vh;display:flex;flex-direction:column;border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));font-size:15px;color:#3a2e28;box-shadow:0 -6px 30px rgba(0,0,0,.2)">' +
+      '<div style="font-weight:700;font-size:17px">🧪 測試模式：要用誰的身分進入？</div>' +
+      '<div style="font-size:13px;color:#8a7b70;margin:4px 0 10px">選一位同仁，就會看到他的劃假畫面；劃假、許願、送出都會真的寫入。</div>' +
+      '<button type="button" data-self="1" style="font:inherit;border:1.5px solid #3a2e28;background:#3a2e28;color:#fff;border-radius:12px;padding:11px;margin-bottom:10px;cursor:pointer">用我自己的身分（' + (fs.real || '') + '）進入</button>' +
+      '<input type="search" placeholder="搜尋姓名、門市、職務" style="font:inherit;border:1px solid #e4d8cc;border-radius:10px;padding:9px 11px;margin-bottom:8px">' +
+      '<div class="lst" style="overflow:auto;display:grid;gap:6px;padding-bottom:4px"></div></div>';
+    document.body.appendChild(wrap);
+    const box = wrap.querySelector('.lst'), q = wrap.querySelector('input');
+    const draw = () => {
+      const k = q.value.trim();
+      box.innerHTML = '';
+      list.filter(p => !k || (p.name + p.store + p.role + p.email).indexOf(k) >= 0).forEach(p => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.style.cssText = 'font:inherit;text-align:left;border:1px solid #e4d8cc;background:#fff;border-radius:10px;padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;gap:8px';
+        b.innerHTML = '<b></b><span style="color:#8a7b70;font-size:13px"></span>';
+        b.querySelector('b').textContent = p.name;
+        b.querySelector('span').textContent = p.store + '・' + p.role;
+        b.onclick = () => { window.LeaveFS.actAs(p.email); location.href = 'index.html'; };
+        box.appendChild(b);
+      });
+      if (!box.children.length) box.innerHTML = '<div style="color:#8a7b70;font-size:13px;padding:8px">找不到符合的同仁</div>';
+    };
+    q.oninput = draw; draw();
+    wrap.querySelector('[data-self]').onclick = () => {
+      try { sessionStorage.setItem(PICKED_KEY, '1'); sessionStorage.removeItem(AS_KEY); } catch (e) {}
+      wrap.remove();
+      if (window.FS_ALLOW_ACT_AS && fs.as) location.reload();
+    };
+  }
+
   /** 系統擁有者切換測試／上線模式 */
   async function setTestMode(on) {
     if (realEmail() !== OWNER) return err('只有系統擁有者可以切換測試／上線模式', 'NOT_OWNER');
@@ -392,7 +429,7 @@
       el.appendChild(b);
     },
     prompt() { if (auth.currentUser && cb) cb({ credential: fakeToken(authEmail()) }); },
-    disableAutoSelect() { try { sessionStorage.removeItem(AS_KEY); } catch (e) {} if (!cfg && realEmail() === OWNER) return; auth.signOut().catch(() => {}); }
+    disableAutoSelect() { try { sessionStorage.removeItem(AS_KEY); sessionStorage.removeItem(PICKED_KEY); } catch (e) {} if (!cfg && realEmail() === OWNER) return; auth.signOut().catch(() => {}); }
   } } };
 
   let lastUid = null;
@@ -415,7 +452,15 @@
       const m = (cfg && cfg.staffMap) || {};
       return Object.keys(m).filter(e => m[e].active).map(e => ({ email: e, name: m[e].name || e, role: m[e].role || '', store: m[e].store || '' }));
     },
-    actAs(email) { try { if (email) sessionStorage.setItem(AS_KEY, email); else sessionStorage.removeItem(AS_KEY); } catch (e) {} },
+    actAs(email) { try { if (email) sessionStorage.setItem(AS_KEY, email); else sessionStorage.removeItem(AS_KEY); sessionStorage.setItem(PICKED_KEY, '1'); } catch (e) {} },
+    /** 測試模式：管理員一進系統先選要模擬誰（這個分頁選過就不再問） */
+    maybePickActAs(fs) {
+      let picked = '';
+      try { picked = sessionStorage.getItem(PICKED_KEY) || ''; } catch (e) {}
+      if (!fs || !fs.test || !fs.admin || fs.as || picked || document.getElementById('fsPick')) return;
+      showPicker(fs);
+    },
+    pickActAs(fs) { showPicker(fs || {}); },
     actingAs() { return actAs(); },
     async importAll(json) {
       if (realEmail() !== OWNER) throw new Error('只有系統擁有者可以匯入');
