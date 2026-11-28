@@ -276,7 +276,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s .8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
-<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128o';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128p';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 <div class="wrap">
@@ -381,6 +381,15 @@
   <h2>系統設定</h2>
   <div class="meta">改完按儲存，員工畫面最多 15 秒就會更新</div>
 
+  <div class="field" id="testField">
+    <label>測試模式（切換後立即生效，不用按儲存）</label>
+    <div class="testadm" id="testAdm">
+      <div class="trow" id="tOwnerRow"><b>系統模式</b><div class="seg2"><button type="button" data-t="0">上線模式</button><button type="button" data-t="1">測試模式</button></div><small id="tModeNote"></small></div>
+      <div class="trow hidden" id="tActRow"><b>🧪 模擬同仁</b><select id="tStaff"></select><button type="button" id="tGo">用他的身分開啟同仁畫面</button><small>會看到那位同仁的完整畫面，劃假、許願、送出都會真的寫入（紀錄會標示是測試模擬）</small></div>
+    </div>
+
+  </div>
+
   <div class="field">
     <label>開放劃假的月份</label>
     <div class="grid2">
@@ -428,15 +437,6 @@
     <div class="subnote">順序會同時套用到所有開放劃假的月份，還沒輪到的人哪個月份都不能劃；送出狀況每個月分開看。</div>
     <div class="ordmonths" id="orderMonths"></div>
     <div id="orderIn"></div>
-  </div>
-
-  <div class="field" id="testField">
-    <label>測試模式</label>
-    <div class="testadm" id="testAdm">
-      <div class="trow" id="tOwnerRow"><b>系統模式</b><div class="seg2"><button type="button" data-t="0">上線模式</button><button type="button" data-t="1">測試模式</button></div><small id="tModeNote"></small></div>
-      <div class="trow hidden" id="tActRow"><b>🧪 模擬同仁</b><select id="tStaff"></select><button type="button" id="tGo">用他的身分開啟同仁畫面</button><small>會看到那位同仁的完整畫面，劃假、許願、送出都會真的寫入（紀錄會標示是測試模擬）</small></div>
-    </div>
-
   </div>
 
   <div class="field" id="syncField">
