@@ -9,7 +9,7 @@
  *           所以只能劃自己的假，不能代填。
  */
 
-const VERSION = '2.5.1';
+const VERSION = '2.5.2';
 const TZ = 'Asia/Taipei';
 const SH = {
   SETTINGS: '設定',
@@ -616,6 +616,7 @@ function buildView_(me, ctx, month) {
       weekend: myLeave.filter(b => isWeekend_(b.date)).length,
       wish: myWish.length,
       wishPending: myAll.filter(b => b.type === WISH).length,
+      mgr: myAll.filter(b => b.type === MGR).length,
       kinds: myAll.filter(b => isKind_(b.type)).length
     },
     kinds: KINDS,

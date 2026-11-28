@@ -151,7 +151,7 @@
   .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--leave);border-radius:50%;animation:s 0.8s linear infinite}
   @keyframes s{to{transform:rotate(360deg)}}
 </style>
-<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128c';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
+<script>/* 有新版就自動換成新版（避免手機一直顯示舊畫面） */(function(){var b='B20261128d';try{fetch(location.pathname+'?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(t){var m=t.match(/var b='(B[0-9a-z]+)'/);if(m&&m[1]!==b&&!sessionStorage.getItem('rl'+m[1])){sessionStorage.setItem('rl'+m[1],'1');location.replace(location.pathname+'?v='+m[1]+location.hash);}}).catch(function(){});}catch(e){}})();</script>
 </head>
 <body>
 
@@ -182,7 +182,7 @@
 
     <div class="counts">
       <div class="count"><small id="cLeaveLabel">自排</small><b id="cLeave">0</b><span id="cLeaveMax"></span></div>
-      <div class="count" id="cWishBox"><small>許願（主管決定）</small><b id="cWish">0</b><span id="cWishMax"></span></div>
+      <div class="count" id="cWishBox"><small>許願（主管決定）</small><b id="cWish">0</b><span id="cWishMax"></span><small id="cWishMgr" class="hidden" style="display:block;margin-top:4px;color:var(--mgr)"></small></div>
       <div class="count" id="cWeekendBox"><small>週六日自選</small><b id="cWeekend">0</b><span id="cWeekendMax"></span></div>
     </div>
 
@@ -430,8 +430,11 @@ function render(d){
 
   $('#cLeaveLabel').textContent = Number(m) + ' 月自排';
   $('#cWishBox').classList.toggle('hidden', !d.limits.maxMgr);
-  $('#cWish').textContent = d.counts.wish || 0;
-  $('#cWishMax').textContent = ' / ' + d.limits.maxMgr + ' 天';
+  const mgrN = d.counts.mgr || 0;
+  $('#cWish').textContent = d.counts.wishPending || 0;
+  $('#cWishMax').textContent = ' / ' + Math.max(0, d.limits.maxMgr - mgrN) + ' 天';
+  $('#cWishMgr').textContent = mgrN ? '主管已排公排 ' + mgrN + ' 天' : '';
+  $('#cWishMgr').classList.toggle('hidden', !mgrN);
   renderTurn(d);
   $('#cLeave').textContent = d.counts.leave;
   $('#cLeaveMax').textContent = ' / ' + d.limits.maxLeave + ' 天';
@@ -563,7 +566,7 @@ function fillSheet(date){
   };
   const showOpts = () => {
     if (d.limits.maxMgr){
-      const why = !open ? '目前不能劃假' : locked || (!hasRoom ? '這天沒有名額' : (d.counts.wish >= d.limits.maxMgr ? '許願 ' + d.limits.maxMgr + ' 天已經滿了' : ''));
+      const why = !open ? '目前不能劃假' : locked || (!hasRoom ? '這天沒有名額' : (d.counts.wish >= d.limits.maxMgr ? ((d.counts.mgr || 0) ? '許願加公排已滿 ' + d.limits.maxMgr + ' 天' : '許願 ' + d.limits.maxMgr + ' 天已經滿了') : ''));
       addOpt('許願', 'wish', why, () => act('book', date, '許願'));
     }
     (d.kinds || []).forEach(k => {
